@@ -1,0 +1,8 @@
+[package]
+name = "spectrum"
+version = "0.1.0"
+authors = ["Kamil Rusin"]
+edition = "2021"
+publish = false
+
+[dependencies]
