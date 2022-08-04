@@ -4,6 +4,10 @@ The game's server will be written in Rust.
 
 ## General
 
+For managing custom settings this project will use [Serde](https://serde.rs/) crate for serialization and
+deserialization of data. More specifically the [Serde YAML](https://github.com/dtolnay/serde-yaml) create for YAML
+support.
+
 The server must allow multiple connections from many endpoints and must be able to handle them. The Rust programming
 language has a built-in support for asynchronous programming. It does not however provide any runtime, so it must be
 provided as a third-party solution. A popular choice is a [Tokio](https://crates.io/crates/tokio) create.
@@ -27,6 +31,9 @@ Crates worth to confider for network-level functionalities:
 
 * [tungstenite](https://crates.io/crates/tungstenite) - Lightweight stream-based WebSocket implementation for Rust.
 * [tokio-tungstenite](https://crates.io/crates/tokio-tungstenite) - Asynchronous WebSockets for Tokio stack.
+
+The package exchange between client and server will use JSON. The Serde create has an extension for JSON support:
+[Serde JSON](https://github.com/serde-rs/json).
 
 ## Game-level
 
