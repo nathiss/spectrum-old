@@ -1,0 +1,18 @@
+@startuml SingleRealm
+
+cloud {
+    WebSocket1 - [Client 1]
+    WebSocket2 - [Client 2]
+}
+
+package "Server" {
+    node "Realm 1" {
+        Entrypoint1 - [Game 1]
+        WebSocket1 --> Entrypoint1
+
+        Entrypoint2 - [Game 2]
+        WebSocket2 --> Entrypoint2
+    }
+}
+
+@enduml
