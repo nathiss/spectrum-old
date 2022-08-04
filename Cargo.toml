@@ -6,3 +6,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+anyhow = "1.0.59"
+chrono = "0.4.20"
+log = "0.4.17"
+fern = "0.6.1"
