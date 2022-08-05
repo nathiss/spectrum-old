@@ -6,7 +6,7 @@ fn initialize_logger() -> Result<(), anyhow::Error> {
     let log_config_result = fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
-                "{}[{}][{}] {}",
+                "{}-{}  ({})|{}",
                 chrono::Local::now().format("[%Y-%m-%d %H:%M:%S%.3f]"),
                 record.target(),
                 record.level(),
