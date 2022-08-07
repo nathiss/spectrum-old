@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async_with_config;
 use tungstenite::protocol::WebSocketConfig;
@@ -17,6 +17,8 @@ pub struct WebSocketListener {
 impl Listener<WebSocketConnection> for WebSocketListener {
     async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error> {
         let tcp_listener = TcpListener::bind(format!("{}:{}", interface, port)).await?;
+
+        info!("Listener bound to {}", format!("{}:{}", interface, port));
 
         Ok(Self { tcp_listener })
     }

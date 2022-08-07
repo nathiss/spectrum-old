@@ -2,12 +2,12 @@ mod client;
 mod network;
 mod packet;
 
-use log::{debug, error, info};
+use log::{debug, info};
 
 use crate::{
     client::Client,
     network::{Connection, Listener, WebSocketListener},
-    packet::ProtobufPacketSerializer,
+    packet::{model::*, ProtobufPacketSerializer},
 };
 
 static BANNER: &str = include_str!("asserts/banner.txt");
@@ -42,25 +42,21 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut listener = WebSocketListener::bind("0.0.0.0", 8080).await?;
 
-    while let Some(mut connection) = listener.accept().await {
+    while let Some(connection) = listener.accept().await {
         info!("New WebSocket connection from: {}", connection.addr());
 
-        if let Err(e) = connection.write_bytes(vec![1u8, 2u8, 3u8]).await {
-            error!("Failed to send data: {}", e);
-        }
-
         let mut client = Client::new(connection, ProtobufPacketSerializer::default());
+
+        let _ = client.write_packet(&ClientMessage::default()).await;
+
         let client_rx = client.get_packet_channel();
+        let addr = client.addr().clone();
 
         tokio::spawn(async move {
             let mut client_rx = client_rx;
 
             while let Some(message) = client_rx.recv().await {
-                debug!(
-                    "Got a message with length: {:?} from {}",
-                    message,
-                    client.addr()
-                );
+                debug!("Got a message: {:?} from {}", message, addr);
             }
 
             debug!("Connection from {} has been closed.", client.addr());
