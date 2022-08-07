@@ -1,9 +1,15 @@
+mod client;
 mod network;
+mod packet;
 
 use log::{debug, error, info};
 use network::WebSocketConnection;
 
-use crate::network::{Connection, Listener, WebSocketListener};
+use crate::{
+    client::Client,
+    network::{Connection, Listener, WebSocketListener},
+    packet::ProtobufPacketSerializer,
+};
 
 static BANNER: &str = include_str!("asserts/banner.txt");
 
@@ -50,14 +56,16 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn handle_new_connection(mut connection: WebSocketConnection) {
-    while let Some(message) = connection.read_bytes().await {
+async fn handle_new_connection(connection: WebSocketConnection) {
+    let mut client = Client::new(connection, ProtobufPacketSerializer::default());
+
+    while let Some(message) = client.read_packet().await {
         debug!(
-            "Got a message with length: {} from {}",
-            message.len(),
-            connection.addr()
+            "Got a message with length: {:?} from {}",
+            message,
+            client.addr()
         );
     }
 
-    debug!("Connection from {} has been closed.", connection.addr());
+    debug!("Connection from {} has been closed.", client.addr());
 }

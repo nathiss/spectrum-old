@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package spectrum.message;
+
+message ClientMessage {
+    oneof ClientMessageData {
+        ClientWelcome welcome_message = 1;
+        ClientLeave leave_message = 2;
+    }
+}
+
+message ClientWelcome {
+    string nick = 1;
+}
+
+message ClientLeave {
+}

@@ -2,6 +2,10 @@
     "cSpell.words": [
         "appenders",
         "chrono",
+        "proto",
+        "protobuf",
+        "PROTOC",
+        "protos",
         "serde",
         "tungstenite"
     ]
