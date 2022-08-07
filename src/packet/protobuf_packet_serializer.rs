@@ -4,7 +4,7 @@ use prost::Message;
 
 use super::{model::ClientMessage, PacketSerializer};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct ProtobufPacketSerializer;
 
 impl PacketSerializer for ProtobufPacketSerializer {

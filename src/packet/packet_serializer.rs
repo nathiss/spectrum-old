@@ -1,5 +1,7 @@
-pub trait PacketSerializer {
-    type Packet;
+use std::marker::Send;
+
+pub trait PacketSerializer: Copy + Send {
+    type Packet: Send;
 
     fn serialize(&self, message: &Self::Packet) -> Vec<u8>;
 

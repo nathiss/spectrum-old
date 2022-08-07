@@ -3,7 +3,6 @@ mod network;
 mod packet;
 
 use log::{debug, error, info};
-use network::WebSocketConnection;
 
 use crate::{
     client::Client,
@@ -50,22 +49,23 @@ async fn main() -> Result<(), anyhow::Error> {
             error!("Failed to send data: {}", e);
         }
 
-        tokio::spawn(async move { handle_new_connection(connection).await });
+        let mut client = Client::new(connection, ProtobufPacketSerializer::default());
+        let client_rx = client.get_packet_channel();
+
+        tokio::spawn(async move {
+            let mut client_rx = client_rx;
+
+            while let Some(message) = client_rx.recv().await {
+                debug!(
+                    "Got a message with length: {:?} from {}",
+                    message,
+                    client.addr()
+                );
+            }
+
+            debug!("Connection from {} has been closed.", client.addr());
+        });
     }
 
     Ok(())
-}
-
-async fn handle_new_connection(connection: WebSocketConnection) {
-    let mut client = Client::new(connection, ProtobufPacketSerializer::default());
-
-    while let Some(message) = client.read_packet().await {
-        debug!(
-            "Got a message with length: {:?} from {}",
-            message,
-            client.addr()
-        );
-    }
-
-    debug!("Connection from {} has been closed.", client.addr());
 }

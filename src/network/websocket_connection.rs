@@ -19,19 +19,15 @@ use super::Connection;
 pub struct WebSocketConnection {
     addr: SocketAddr,
     output_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
-    input_queue: UnboundedReceiver<Vec<u8>>,
+    input_queue: Option<UnboundedReceiver<Vec<u8>>>,
 }
 
 #[async_trait]
 impl Connection for WebSocketConnection {
-    async fn read_bytes(&mut self) -> Option<Vec<u8>> {
-        match self.input_queue.recv().await {
-            Some(message) => Some(message),
-            None => {
-                // This means that the channel has been closed and there are no more messages to read.
-
-                None
-            }
+    fn get_incoming_data_channel(&mut self) -> UnboundedReceiver<Vec<u8>> {
+        match self.input_queue.take() {
+            Some(queue) => queue,
+            None => panic!("get_incoming_data_channel can only be called once."),
         }
     }
 
@@ -60,7 +56,7 @@ impl WebSocketConnection {
         Self {
             addr,
             output_stream,
-            input_queue: rx,
+            input_queue: Some(rx),
         }
     }
 

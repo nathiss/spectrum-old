@@ -1,38 +1,52 @@
 use std::net::SocketAddr;
 
 use log::error;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use crate::{network::Connection, packet::PacketSerializer};
 
 #[derive(Debug)]
 pub struct Client<C: Connection, S: PacketSerializer> {
     connection: C,
+    packet_rx: Option<UnboundedReceiver<S::Packet>>,
     serializer: S,
 }
 
-impl<C: Connection, S: PacketSerializer> Client<C, S> {
-    pub fn new(connection: C, serializer: S) -> Self {
+impl<C: Connection, S: PacketSerializer + 'static> Client<C, S> {
+    pub fn new(mut connection: C, serializer: S) -> Self {
+        let mut raw_data_rx = connection.get_incoming_data_channel();
+        let (packet_tx, packet_rx) = unbounded_channel();
+
+        let addr = connection.addr().clone();
+        let deserializer = serializer.clone();
+
+        tokio::spawn(async move {
+            while let Some(raw_data) = raw_data_rx.recv().await {
+                match deserializer.deserialize(raw_data) {
+                    Ok(packet) => drop(packet_tx.send(packet)),
+                    Err(e) => {
+                        error!("Failed to deserialize data from {}. Error: {}", addr, e);
+
+                        break;
+                    }
+                }
+            }
+
+            // This means that the network client (Connection) has closed the other side of the channel.
+            // In that case we simply exit and drop out tx.
+        });
+
         Self {
             connection,
+            packet_rx: Some(packet_rx),
             serializer,
         }
     }
 
-    pub async fn read_packet(&mut self) -> Option<S::Packet> {
-        match self.connection.read_bytes().await {
-            Some(data) => match self.serializer.deserialize(data) {
-                Ok(packet) => Some(packet),
-                Err(e) => {
-                    error!(
-                        "Failed to deserialize the client's package from {}. Error: {}",
-                        self.addr(),
-                        e,
-                    );
-
-                    None
-                }
-            },
-            None => None,
+    pub fn get_packet_channel(&mut self) -> UnboundedReceiver<S::Packet> {
+        match self.packet_rx.take() {
+            Some(queue) => queue,
+            None => panic!("get_packet_channel can only be called once."),
         }
     }
 
