@@ -32,7 +32,7 @@ impl<C: Connection, S: PacketSerializer + 'static> Client<C, S> {
                 }
             }
 
-            // This means tPhat the network client (Connection) has closed the other side of the channel.
+            // This means that the network client (Connection) has closed the other side of the channel.
             // In that case we simply exit and drop out tx.
         });
 
