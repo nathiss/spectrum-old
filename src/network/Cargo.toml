@@ -1,0 +1,15 @@
+[package]
+name = "spectrum-network"
+version = "0.1.0"
+authors = ["Kamil Rusin"]
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+futures-util = "0.3"
+log = "0.4"
+tokio = { version = "1.20", features = ["rt-multi-thread", "sync"] }
+tokio-tungstenite = "0.17"
+tungstenite = "0.17"

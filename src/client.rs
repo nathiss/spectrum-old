@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 
 use log::error;
+use spectrum_network::Connection;
+use spectrum_packet::PacketSerializer;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-
-use crate::{network::Connection, packet::PacketSerializer};
 
 #[derive(Debug)]
 pub struct Client<C: Connection, S: PacketSerializer> {

@@ -610,11 +610,31 @@ dependencies = [
  "fern",
  "futures-util",
  "log",
- "prost",
- "prost-build",
+ "spectrum-network",
+ "spectrum-packet",
+ "tokio",
+]
+
+[[package]]
+name = "spectrum-network"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures-util",
+ "log",
  "tokio",
  "tokio-tungstenite",
  "tungstenite",
+]
+
+[[package]]
+name = "spectrum-packet"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "prost",
+ "prost-build",
 ]
 
 [[package]]

@@ -1,14 +1,10 @@
 mod client;
-mod network;
-mod packet;
 
 use log::{debug, info};
+use spectrum_network::{Connection, Listener, WebSocketListener};
+use spectrum_packet::{model::*, ProtobufPacketSerializer};
 
-use crate::{
-    client::Client,
-    network::{Connection, Listener, WebSocketListener},
-    packet::{model::*, ProtobufPacketSerializer},
-};
+use crate::client::Client;
 
 static BANNER: &str = include_str!("asserts/banner.txt");
 
