@@ -17,8 +17,8 @@ impl<C: Connection, S: PacketSerializer + 'static> Client<C, S> {
         let mut raw_data_rx = connection.get_incoming_data_channel();
         let (packet_tx, packet_rx) = unbounded_channel();
 
-        let addr = connection.addr().clone();
-        let deserializer = serializer.clone();
+        let addr = *connection.addr();
+        let deserializer = serializer;
 
         tokio::spawn(async move {
             while let Some(raw_data) = raw_data_rx.recv().await {
@@ -51,7 +51,7 @@ impl<C: Connection, S: PacketSerializer + 'static> Client<C, S> {
     }
 
     pub async fn write_packet(&mut self, packet: &S::Packet) -> Result<(), anyhow::Error> {
-        let data = self.serializer.serialize(&packet);
+        let data = self.serializer.serialize(packet);
 
         self.connection.write_bytes(data).await
     }

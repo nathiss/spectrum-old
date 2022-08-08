@@ -26,10 +26,13 @@ impl Listener<WebSocketConnection> for WebSocketListener {
     async fn accept(&mut self) -> Option<WebSocketConnection> {
         loop {
             match self.tcp_listener.accept().await {
-                Ok((stream, addr)) => match handle_new_stream(stream, addr).await {
-                    Some(ws_stream) => break Some(ws_stream),
-                    None => {} /* We continue the loop waiting for the next valid connection. */
-                },
+                Ok((stream, addr)) => {
+                    if let Some(ws_stream) = handle_new_stream(stream, addr).await {
+                        break Some(ws_stream);
+                    }
+
+                    /* We continue the loop waiting for the next valid connection. */
+                }
                 Err(e) => {
                     error!(
                         "Received an error while listening for incoming connections: {}",
@@ -65,9 +68,9 @@ async fn handle_new_stream(stream: TcpStream, addr: SocketAddr) -> Option<WebSoc
 
 #[inline]
 fn get_websocket_config() -> Option<WebSocketConfig> {
-    let mut config = WebSocketConfig::default();
-    config.max_message_size = Some(16 << 20 /* 16 MiB */);
-    config.max_frame_size = Some(1 << 20 /* 1 MiB */);
-
-    Some(config)
+    Some(WebSocketConfig {
+        max_message_size: Some(16 << 20 /* 16 MiB */),
+        max_frame_size: Some(1 << 20 /* 1 MiB */),
+        ..Default::default()
+    })
 }

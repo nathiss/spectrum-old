@@ -46,7 +46,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let _ = client.write_packet(&ClientMessage::default()).await;
 
         let client_rx = client.get_packet_channel();
-        let addr = client.addr().clone();
+        let addr = *client.addr();
 
         tokio::spawn(async move {
             let mut client_rx = client_rx;

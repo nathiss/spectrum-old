@@ -49,9 +49,7 @@ impl WebSocketConnection {
 
         let (tx, rx) = unbounded_channel();
 
-        tokio::spawn(async move {
-            Self::handle_incoming_messages(input_stream, tx, addr.clone()).await
-        });
+        tokio::spawn(async move { Self::handle_incoming_messages(input_stream, tx, addr).await });
 
         Self {
             addr,
