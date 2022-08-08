@@ -16,7 +16,7 @@ use tungstenite::Message;
 use super::Connection;
 
 #[derive(Debug)]
-pub struct WebSocketConnection {
+pub(crate) struct WebSocketConnection {
     addr: SocketAddr,
     output_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
     input_queue: Option<UnboundedReceiver<Vec<u8>>>,

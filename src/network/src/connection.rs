@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 #[async_trait]
-pub trait Connection {
+pub trait Connection: Send {
     /// Returns a receiver of peer's incoming data.
     ///
     /// This method can only be called once.

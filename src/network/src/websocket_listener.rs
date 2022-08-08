@@ -9,21 +9,15 @@ use tungstenite::protocol::WebSocketConfig;
 use super::{Listener, WebSocketConnection};
 
 #[derive(Debug)]
-pub struct WebSocketListener {
+pub(crate) struct WebSocketListener {
     tcp_listener: TcpListener,
 }
 
 #[async_trait]
-impl Listener<WebSocketConnection> for WebSocketListener {
-    async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error> {
-        let tcp_listener = TcpListener::bind(format!("{}:{}", interface, port)).await?;
+impl Listener for WebSocketListener {
+    type C = WebSocketConnection;
 
-        info!("Listener bound to {}", format!("{}:{}", interface, port));
-
-        Ok(Self { tcp_listener })
-    }
-
-    async fn accept(&mut self) -> Option<WebSocketConnection> {
+    async fn accept(&mut self) -> Option<Self::C> {
         loop {
             match self.tcp_listener.accept().await {
                 Ok((stream, addr)) => {
@@ -43,6 +37,16 @@ impl Listener<WebSocketConnection> for WebSocketListener {
                 }
             }
         }
+    }
+}
+
+impl WebSocketListener {
+    pub(crate) async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error> {
+        let tcp_listener = TcpListener::bind(format!("{}:{}", interface, port)).await?;
+
+        info!("Listener bound to {}", format!("{}:{}", interface, port));
+
+        Ok(Self { tcp_listener })
     }
 }
 

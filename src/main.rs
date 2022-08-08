@@ -1,7 +1,7 @@
 mod client;
 
 use log::{debug, info};
-use spectrum_network::{Connection, Listener, WebSocketListener};
+use spectrum_network::{Connection, Listener, ListenerBuilder};
 use spectrum_packet::{model::*, ProtobufPacketSerializer};
 
 use crate::client::Client;
@@ -36,7 +36,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     info!("{}", BANNER);
 
-    let mut listener = WebSocketListener::bind("0.0.0.0", 8080).await?;
+    let mut listener = ListenerBuilder::default()
+        .set_interface("0.0.0.0")
+        .set_port(8080)
+        .build()
+        .await?;
 
     while let Some(connection) = listener.accept().await {
         info!("New WebSocket connection from: {}", connection.addr());

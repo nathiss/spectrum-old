@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use super::Connection;
 
 #[async_trait]
-pub trait Listener<C: Connection>: Sized {
-    async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error>;
+pub trait Listener: Sized {
+    type C: Connection;
 
-    async fn accept(&mut self) -> Option<C>;
+    async fn accept(&mut self) -> Option<Self::C>;
 }
