@@ -6,10 +6,10 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async_with_config;
 use tungstenite::protocol::WebSocketConfig;
 
-use super::{Listener, WebSocketConnection};
+use super::{websocket_connection::WebSocketConnection, Listener};
 
 #[derive(Debug)]
-pub(crate) struct WebSocketListener {
+pub(super) struct WebSocketListener {
     tcp_listener: TcpListener,
 }
 
@@ -41,7 +41,7 @@ impl Listener for WebSocketListener {
 }
 
 impl WebSocketListener {
-    pub(crate) async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error> {
+    pub(super) async fn bind<'a>(interface: &'a str, port: u16) -> Result<Self, anyhow::Error> {
         let tcp_listener = TcpListener::bind(format!("{}:{}", interface, port)).await?;
 
         info!("Listener bound to {}", format!("{}:{}", interface, port));

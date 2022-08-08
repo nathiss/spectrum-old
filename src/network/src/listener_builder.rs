@@ -1,4 +1,6 @@
-use crate::{Listener, WebSocketListener};
+use crate::Listener;
+
+use super::websocket_listener::WebSocketListener;
 
 #[derive(Debug, Default)]
 pub struct ListenerBuilder<'a> {
