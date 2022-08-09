@@ -5,13 +5,88 @@ package spectrum.message.server;
 message ServerMessage {
     oneof ServerMessageData {
         ServerWelcome welcome_message = 1;
-        ServerLeave leave_message = 2;
+        LobbyUpdate lobby_update = 2;
+        GameStared game_started = 3;
+        ServerLeave leave_message = 4;
     }
 }
 
+/* This message is a server's response to spectrum.message.client.ClientWelcome. */
 message ServerWelcome {
-    string nick = 1;
+    enum StatusCode {
+        /* This code means that the request has been accepted by the server.
+         *
+         * After receiving this message the player should await the next server message.
+         */
+        SUCCESS = 0;
+
+        /* This code means that the nick is already being used by another player from the same game.
+         *
+         * The player should repeat the last message with a different nick.
+         */
+        NICK_TAKEN = 1;
+
+        /* This code means that the game specified by game_id does not exist or is in a invalid state.
+         *
+         * An invalid state can mean that the game has already started or it cannot accept another player. The server
+         * does not differentiate those cases for the players.
+         * The player should repeat the last message with a different game_id.
+         */
+        GAME_COULD_NOT_BE_FOUND = 2;
+
+        /* This code means that the message was ill-formed.
+         *
+         * There can be number of reasons:
+         *     - message was too large,
+         *     - player's nick was empty,
+         *     - the server refused to proces the message due to the lack of available resources or some internal error.
+         * The server will terminate the connection with the player after this message is fully send.
+         */
+        BAD_REQUEST = 3;
+    }
+
+    StatusCode status_code = 1;
 }
 
+/* This message is used to indicate a lobby update for the currently joined game. */
+message LobbyUpdate {
+    enum StatusCode {
+        /* This code means that the game is not yet ready.
+         *
+         * All players should await next message from the server.
+         */
+        WAITING = 0;
+
+        /* This code means the the game is ready.
+         *
+         * All players should respond with a confirmation message that they are ready to start the game. Once
+         * confirmations from all players have been received, then the server will start the game.
+         */
+        GAME_READY = 1;
+    }
+
+    StatusCode status_code = 1;
+
+    /* This field holds the list of all currently connected players to the particular game.
+     *
+     * Players should always use this field to override their data in case a player leaves the game.
+     */
+    repeated string players = 2;
+}
+
+/* This message is used to indicate that all players confirmed their readiness and the game has started. */
+message GameStared {
+}
+
+/* This message is a server's response to spectrum.message.client.ClientLeave. */
 message ServerLeave {
+    enum StatusCode {
+        /* This code means that the server successfully freed all player's resources.
+         *
+         * The server will terminate the connection with the player after this message has been fully transmitted.
+         */
+        SUCCESS = 0;
+    }
+
+    StatusCode status_code = 1;
 }

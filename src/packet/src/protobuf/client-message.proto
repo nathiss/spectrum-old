@@ -5,13 +5,43 @@ package spectrum.message.client;
 message ClientMessage {
     oneof ClientMessageData {
         ClientWelcome welcome_message = 1;
-        ClientLeave leave_message = 2;
+        PlayerReady player_ready = 2;
+        ClientLeave leave_message = 3;
     }
 }
 
+/* This message is used to join a game.
+ *
+ * The server expects this message at the very beginning from all players.
+ */
 message ClientWelcome {
+    /* The player's nick.
+     *
+     * This field cannot be empty and must be of "reasonable" length.
+     */
     string nick = 1;
+
+    /* The ID of the game the player wants to join to.
+     *
+     * If the game_id has not been passed, then the server will find an available game for the player.
+     * If the game_id has been passed, but the game cannot be joined to, then the player should send the message again
+     * with a different game_id.
+     */
+    optional string game_id = 2;
 }
 
+/* This message is used to indicate that the player is ready to start the game.
+ *
+ * Once this message has been sent, the player must wait for either spectrum.message.server.LobbyUpdate or
+ * spectrum.message.server.GameStared.
+ */
+message PlayerReady {
+}
+
+/* This message is used to leave an in-progress game.
+ *
+ * When this message is received the server will respond with spectrum.message.server.ServerLeave as soon as possible.
+ * It is considered extremely rude to terminate the connection before server's response has been fully received.
+ */
 message ClientLeave {
 }

@@ -2,6 +2,7 @@
     "cSpell.words": [
         "appenders",
         "chrono",
+        "oneof",
         "proto",
         "protobuf",
         "PROTOC",
@@ -9,5 +10,6 @@
         "reqwest",
         "serde",
         "tungstenite"
-    ]
+    ],
+    "cSpell.enableFiletypes": ["proto3"]
 }
