@@ -6,6 +6,7 @@
         "protobuf",
         "PROTOC",
         "protos",
+        "reqwest",
         "serde",
         "tungstenite"
     ]
