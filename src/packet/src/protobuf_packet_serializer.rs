@@ -18,3 +18,21 @@ impl PacketSerializer for ProtobufPacketSerializer {
         Ok(ClientMessage::decode(&mut Cursor::new(raw))?)
     }
 }
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use crate::{PacketSerializer, ProtobufPacketSerializer};
+
+    #[test]
+    fn deserialize_givenVectorIsEmpty_returnsError() {
+        let serializer = ProtobufPacketSerializer::default();
+        let incorrect_data = vec![13u8, 37u8, 42u8];
+
+        // Act
+        let result = serializer.deserialize(incorrect_data);
+
+        // Assert
+        assert!(result.is_err());
+    }
+}
