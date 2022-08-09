@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package spectrum.message;
+package spectrum.message.client;
 
 message ClientMessage {
     oneof ClientMessageData {

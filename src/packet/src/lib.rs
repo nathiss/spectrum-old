@@ -1,6 +1,8 @@
+mod client_message_packet_serializer;
 pub mod model;
 mod packet_serializer;
-mod protobuf_packet_serializer;
+mod server_message_packet_serializer;
 
+pub use client_message_packet_serializer::ClientMessagePacketSerializer;
 pub use packet_serializer::PacketSerializer;
-pub use protobuf_packet_serializer::ProtobufPacketSerializer;
+pub use server_message_packet_serializer::ServerMessagePacketSerializer;

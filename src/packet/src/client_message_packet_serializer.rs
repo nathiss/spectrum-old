@@ -5,9 +5,9 @@ use prost::Message;
 use super::{model::ClientMessage, PacketSerializer};
 
 #[derive(Debug, Default, Copy, Clone)]
-pub struct ProtobufPacketSerializer;
+pub struct ClientMessagePacketSerializer;
 
-impl PacketSerializer for ProtobufPacketSerializer {
+impl PacketSerializer for ClientMessagePacketSerializer {
     type Packet = ClientMessage;
 
     fn serialize(&self, message: &Self::Packet) -> Vec<u8> {
@@ -22,11 +22,11 @@ impl PacketSerializer for ProtobufPacketSerializer {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use crate::{PacketSerializer, ProtobufPacketSerializer};
+    use crate::{ClientMessagePacketSerializer, PacketSerializer};
 
     #[test]
-    fn deserialize_givenVectorIsEmpty_returnsError() {
-        let serializer = ProtobufPacketSerializer::default();
+    fn deserialize_givenVectorWithInvalidData_returnsError() {
+        let serializer = ClientMessagePacketSerializer::default();
         let incorrect_data = vec![13u8, 37u8, 42u8];
 
         // Act

@@ -2,7 +2,7 @@ mod client;
 
 use log::{debug, info};
 use spectrum_network::{Connection, Listener, ListenerBuilder};
-use spectrum_packet::{model::*, ProtobufPacketSerializer};
+use spectrum_packet::{model::*, ClientMessagePacketSerializer, ServerMessagePacketSerializer};
 
 use crate::client::Client;
 
@@ -45,9 +45,13 @@ async fn main() -> Result<(), anyhow::Error> {
     while let Some(connection) = listener.accept().await {
         info!("New WebSocket connection from: {}", connection.addr());
 
-        let mut client = Client::new(connection, ProtobufPacketSerializer::default());
+        let mut client = Client::new(
+            connection,
+            ClientMessagePacketSerializer::default(),
+            ServerMessagePacketSerializer::default(),
+        );
 
-        let _ = client.write_packet(&ClientMessage::default()).await;
+        let _ = client.write_packet(&ServerMessage::default()).await;
 
         let client_rx = client.get_packet_channel();
         let addr = *client.addr();
