@@ -2,15 +2,13 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use super::Connection;
+use crate::WebSocketConnection;
 
 #[async_trait]
 pub trait Listener: Sized {
-    type C: Connection;
+    async fn accept(&mut self) -> Option<WebSocketConnection>;
 
-    async fn accept(&mut self) -> Option<Self::C>;
-
-    async fn accept_once(&mut self) -> Option<Self::C>;
+    async fn accept_once(&mut self) -> Option<WebSocketConnection>;
 
     fn set_handshake_timeout(&mut self, handshake_timeout: Duration);
 }

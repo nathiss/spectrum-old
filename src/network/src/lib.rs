@@ -7,3 +7,4 @@ mod websocket_listener;
 pub use connection::Connection;
 pub use listener::Listener;
 pub use listener_builder::ListenerBuilder;
+pub use websocket_connection::WebSocketConnection;

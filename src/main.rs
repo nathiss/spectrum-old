@@ -1,10 +1,5 @@
-mod client;
-
-use log::{debug, info};
-use spectrum_network::{Connection, Listener, ListenerBuilder};
-use spectrum_packet::{model::*, ClientMessagePacketSerializer, ServerMessagePacketSerializer};
-
-use crate::client::Client;
+use log::info;
+use spectrum_server::{Server, ServerConfig};
 
 static BANNER: &str = include_str!("asserts/banner.txt");
 
@@ -30,42 +25,29 @@ fn initialize_logger() -> Result<(), anyhow::Error> {
     }
 }
 
+fn get_server_configuration() -> ServerConfig {
+    ServerConfig {
+        serve_interface: "127.0.0.1".to_owned(),
+        serve_port: 8080,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     initialize_logger()?;
 
     info!("{}", BANNER);
 
-    let mut listener = ListenerBuilder::default()
-        .set_interface("0.0.0.0")
-        .set_port(8080)
-        .build()
-        .await?;
+    let mut server = Server::new(get_server_configuration());
 
-    while let Some(connection) = listener.accept().await {
-        info!("New WebSocket connection from: {}", connection.addr());
+    let server_cancellation_token = server.get_cancellation_token();
+    ctrlc::set_handler(move || server_cancellation_token.cancel())?;
 
-        let mut client = Client::new(
-            connection,
-            ClientMessagePacketSerializer::default(),
-            ServerMessagePacketSerializer::default(),
-        );
+    server.init().await;
 
-        let _ = client.write_packet(&ServerMessage::default()).await;
+    server.serve().await?;
 
-        let client_rx = client.get_packet_channel();
-        let addr = *client.addr();
-
-        tokio::spawn(async move {
-            let mut client_rx = client_rx;
-
-            while let Some(message) = client_rx.recv().await {
-                debug!("Got a message: {:?} from {}", message, addr);
-            }
-
-            debug!("Connection from {} has been closed.", client.addr());
-        });
-    }
+    server.join().await;
 
     Ok(())
 }

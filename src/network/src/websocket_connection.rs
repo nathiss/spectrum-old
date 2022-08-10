@@ -16,7 +16,7 @@ use tungstenite::Message;
 use super::Connection;
 
 #[derive(Debug)]
-pub(super) struct WebSocketConnection {
+pub struct WebSocketConnection {
     addr: SocketAddr,
     output_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
     input_queue: Option<UnboundedReceiver<Vec<u8>>>,
@@ -73,6 +73,16 @@ impl WebSocketConnection {
                                 addr
                             );
                             break;
+                        }
+                        Message::Ping(ping_data) => {
+                            debug!("Got a ping message from {}. Content: {:?}", addr, ping_data);
+
+                            // Ignore this message. It will be handled by the library.
+                        }
+                        Message::Pong(pong_data) => {
+                            debug!("Got a pong message from {}. Content: {:?}", addr, pong_data);
+
+                            // Simply ignore.
                         }
                         Message::Binary(message) => {
                             if let Err(e) = tx.send(message) {

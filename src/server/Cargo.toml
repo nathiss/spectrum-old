@@ -1,0 +1,19 @@
+[package]
+name = "spectrum-server"
+version = "0.1.0"
+authors = ["Kamil Rusin"]
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+futures = "0.3"
+log = "0.4"
+sm = "0.9"
+tokio = { version = "1.20", features = ["macros", "sync"] }
+tokio-util = "0.7"
+spectrum-network = { path = "../network" }
+spectrum-packet = { path = "../packet" }
+
+[dev-dependencies]
+test-case = "2.2"

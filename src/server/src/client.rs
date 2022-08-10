@@ -1,21 +1,29 @@
-use std::net::SocketAddr;
+use std::{
+    hash::{Hash, Hasher},
+    net::SocketAddr,
+};
 
 use log::error;
-use spectrum_network::Connection;
-use spectrum_packet::PacketSerializer;
+use spectrum_network::{Connection, WebSocketConnection};
+use spectrum_packet::{
+    model::{ClientMessage, ServerMessage},
+    ClientMessagePacketSerializer, PacketSerializer, ServerMessagePacketSerializer,
+};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 #[derive(Debug)]
-pub struct Client<C: Connection, CS: PacketSerializer, SS: PacketSerializer> {
-    connection: C,
-    packet_rx: Option<UnboundedReceiver<CS::Packet>>,
-    server_serializer: SS,
+pub struct Client {
+    connection: WebSocketConnection,
+    packet_rx: Option<UnboundedReceiver<ClientMessage>>,
+    server_serializer: ServerMessagePacketSerializer,
 }
 
-impl<C: Connection, CS: PacketSerializer + 'static, SS: PacketSerializer + 'static>
-    Client<C, CS, SS>
-{
-    pub fn new(mut connection: C, client_serializer: CS, server_serializer: SS) -> Self {
+impl Client {
+    pub fn new(
+        mut connection: WebSocketConnection,
+        client_serializer: ClientMessagePacketSerializer,
+        server_serializer: ServerMessagePacketSerializer,
+    ) -> Self {
         let mut raw_data_rx = connection.get_incoming_data_channel();
         let (packet_tx, packet_rx) = unbounded_channel();
 
@@ -44,20 +52,26 @@ impl<C: Connection, CS: PacketSerializer + 'static, SS: PacketSerializer + 'stat
         }
     }
 
-    pub fn get_packet_channel(&mut self) -> UnboundedReceiver<CS::Packet> {
+    pub fn get_packet_channel(&mut self) -> UnboundedReceiver<ClientMessage> {
         match self.packet_rx.take() {
             Some(queue) => queue,
             None => panic!("get_packet_channel can only be called once."),
         }
     }
 
-    pub async fn write_packet(&mut self, packet: &SS::Packet) -> Result<(), anyhow::Error> {
+    pub async fn write_packet(&mut self, packet: &ServerMessage) -> Result<(), anyhow::Error> {
         let data = self.server_serializer.serialize(packet);
 
         self.connection.write_bytes(data).await
     }
 
-    pub fn addr(&self) -> &SocketAddr {
-        self.connection.addr()
+    pub fn addr(&self) -> SocketAddr {
+        *self.connection.addr()
+    }
+}
+
+impl Hash for Client {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.connection.addr().hash(state);
     }
 }

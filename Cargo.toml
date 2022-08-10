@@ -9,13 +9,14 @@ publish = false
 members = [
     "src/network",
     "src/packet",
+    "src/server",
 ]
 
 [dependencies]
 anyhow = "1.0"
 chrono = "0.4"
+ctrlc = "3.2"
 fern = "0.6"
 log = "0.4"
-spectrum-network = { path = "src/network" }
-spectrum-packet = { path = "src/packet" }
+spectrum-server = { path = "src/server" }
 tokio = { version = "1.20", features = ["macros"] }

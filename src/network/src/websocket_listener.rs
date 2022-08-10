@@ -21,9 +21,7 @@ pub(super) struct WebSocketListener {
 
 #[async_trait]
 impl Listener for WebSocketListener {
-    type C = WebSocketConnection;
-
-    async fn accept(&mut self) -> Option<Self::C> {
+    async fn accept(&mut self) -> Option<WebSocketConnection> {
         loop {
             match self.inner_accept().await {
                 Ok(Some(ws_stream)) => break Some(ws_stream),
@@ -33,7 +31,7 @@ impl Listener for WebSocketListener {
         }
     }
 
-    async fn accept_once(&mut self) -> Option<Self::C> {
+    async fn accept_once(&mut self) -> Option<WebSocketConnection> {
         match self.inner_accept().await {
             Ok(Some(ws_stream)) => Some(ws_stream),
             Ok(None) => None,
@@ -49,11 +47,15 @@ impl Listener for WebSocketListener {
 impl WebSocketListener {
     pub(super) async fn bind(interface: &str, port: u16) -> Result<Self, anyhow::Error> {
         if interface.is_empty() {
+            error!("Given listener interface is empty.");
             return Err(anyhow::Error::msg("Interface cannot be empty"));
         }
 
         match port {
-            0 => Err(anyhow::Error::msg("Port number must be a positive integer")),
+            0 => {
+                error!("Given listener port number is zero.");
+                Err(anyhow::Error::msg("Port number must be a positive integer"))
+            }
             _ => {
                 let tcp_listener = TcpListener::bind((interface, port)).await?;
 
@@ -103,8 +105,9 @@ impl WebSocketListener {
                 Some(WebSocketConnection::new(ws_stream, addr))
             }
             Ok(Err(e)) => {
-                error!(
-                    "Failed to complete WebSocket handshake with {}; reason: {}",
+                error!("Failed to complete WebSocket handshake with {}", addr);
+                debug!(
+                    "Failed to complete WebSocket handshake with {}. Error: {}",
                     addr, e
                 );
 
