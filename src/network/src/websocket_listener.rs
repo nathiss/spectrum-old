@@ -11,11 +11,12 @@ use tungstenite::protocol::WebSocketConfig;
 
 use super::{websocket_connection::WebSocketConnection, Listener};
 
-static HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+static DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
 pub(super) struct WebSocketListener {
     tcp_listener: TcpListener,
+    handshake_timeout: Duration,
 }
 
 #[async_trait]
@@ -39,6 +40,10 @@ impl Listener for WebSocketListener {
             Err(_) => None,
         }
     }
+
+    fn set_handshake_timeout(&mut self, handshake_timeout: Duration) {
+        self.handshake_timeout = handshake_timeout;
+    }
 }
 
 impl WebSocketListener {
@@ -54,14 +59,17 @@ impl WebSocketListener {
 
                 info!("Listener bound to {}:{}", interface, port);
 
-                Ok(Self { tcp_listener })
+                Ok(Self {
+                    tcp_listener,
+                    handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
+                })
             }
         }
     }
 
     async fn inner_accept(&self) -> Result<Option<WebSocketConnection>, anyhow::Error> {
         match self.tcp_listener.accept().await {
-            Ok((stream, addr)) => match handle_new_stream(stream, addr).await {
+            Ok((stream, addr)) => match self.handle_new_stream(stream, addr).await {
                 Some(ws_stream) => Ok(Some(ws_stream)),
                 None => Ok(None),
             },
@@ -75,39 +83,43 @@ impl WebSocketListener {
             }
         }
     }
-}
 
-async fn handle_new_stream(stream: TcpStream, addr: SocketAddr) -> Option<WebSocketConnection> {
-    debug!("New connection from: {}", addr);
+    async fn handle_new_stream(
+        &self,
+        stream: TcpStream,
+        addr: SocketAddr,
+    ) -> Option<WebSocketConnection> {
+        debug!("New connection from: {}", addr);
 
-    match timeout(
-        HANDSHAKE_TIMEOUT,
-        accept_async_with_config(stream, get_websocket_config()),
-    )
-    .await
-    {
-        Ok(Ok(ws_stream)) => {
-            debug!("Handshake with {} completed successfully", addr);
+        match timeout(
+            self.handshake_timeout,
+            accept_async_with_config(stream, get_websocket_config()),
+        )
+        .await
+        {
+            Ok(Ok(ws_stream)) => {
+                debug!("Handshake with {} completed successfully", addr);
 
-            Some(WebSocketConnection::new(ws_stream, addr))
-        }
-        Ok(Err(e)) => {
-            error!(
-                "Failed to complete WebSocket handshake with {}; reason: {}",
-                addr, e
-            );
+                Some(WebSocketConnection::new(ws_stream, addr))
+            }
+            Ok(Err(e)) => {
+                error!(
+                    "Failed to complete WebSocket handshake with {}; reason: {}",
+                    addr, e
+                );
 
-            None
-        }
-        Err(e) => {
-            error!(
-                "The handshake from {} failed to complete in {}. Error: {}",
-                addr,
-                HANDSHAKE_TIMEOUT.as_secs(),
-                e
-            );
+                None
+            }
+            Err(e) => {
+                error!(
+                    "The handshake from {} failed to complete in {}. Error: {}",
+                    addr,
+                    self.handshake_timeout.as_secs(),
+                    e
+                );
 
-            None
+                None
+            }
         }
     }
 }

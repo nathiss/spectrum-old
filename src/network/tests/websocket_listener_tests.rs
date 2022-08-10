@@ -115,6 +115,7 @@ async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<
     let port = get_free_port_number();
 
     let mut listener = build_websocket_listener("127.0.0.1", port).await?;
+    listener.set_handshake_timeout(Duration::from_millis(50));
 
     let handle = tokio::spawn(async move { listener.accept_once().await });
 
@@ -123,8 +124,8 @@ async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<
     info!("Waiting up to 31 secs for handshake timeout.");
 
     // Act
-    // The timeout for handshake is 30 secs. We wait up to 31 secs and then we fail.
-    let result = timeout(Duration::from_secs(31), handle).await??;
+    // The timeout for handshake is 50 millis. We wait up to 100 millis and then we fail.
+    let result = timeout(Duration::from_millis(100), handle).await??;
 
     // Assert
     assert!(result.is_none());
