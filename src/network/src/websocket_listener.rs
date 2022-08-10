@@ -32,7 +32,7 @@ impl Listener for WebSocketListener {
         }
     }
 
-    async fn accept_once(&mut self) -> Option<WebSocketConnection> {
+    async fn accept_once(&mut self) -> Option<Self::C> {
         match self.inner_accept().await {
             Ok(Some(ws_stream)) => Some(ws_stream),
             Ok(None) => None,
