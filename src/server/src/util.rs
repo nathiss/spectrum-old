@@ -33,5 +33,59 @@ pub(crate) fn calculate_hash<T: Hash>(t: &T) -> u64 {
 ///
 /// A `impl Future<Output = ()>` that wraps around `handle` is returned.
 pub(crate) fn convert_to_future(handle: JoinHandle<()>) -> impl Future<Output = ()> {
-    async move { handle.await.unwrap() }
+    async move { drop(handle.await) }
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use std::time::Duration;
+
+    use futures::FutureExt;
+    use tokio::time::timeout;
+
+    use super::*;
+
+    #[test]
+    fn calculate_hash_u64_returnsCorrectHash() {
+        // Arrange
+        let data = 1337u64;
+        let data_hash = 17549176527789548176;
+
+        // Act
+        let result = calculate_hash(&data);
+
+        // Assert
+        assert_eq!(data_hash, result);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn convert_to_future_passedAlreadyCompletedHandle_completesImmediately() {
+        // Arrange
+        let handle = tokio::spawn(async {});
+
+        // Act
+        let future = convert_to_future(handle);
+
+        // Assert
+        // `handle` isn't ready "immediately". The given closure still needs to be evaluated, hence the sleep.
+        tokio::time::sleep(Duration::from_millis(1)).await;
+
+        assert!(future.now_or_never().is_some());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn convert_to_future_passedANotYetReadyHandle_completesAfterHandleCompletes(
+    ) -> Result<(), anyhow::Error> {
+        // Arrange
+        let handle = tokio::spawn(async { tokio::time::sleep(Duration::from_millis(50)).await });
+
+        // Act
+        let future = convert_to_future(handle);
+
+        // Assert
+        timeout(Duration::from_millis(75), future).await?;
+
+        Ok(())
+    }
 }
