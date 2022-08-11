@@ -4,9 +4,10 @@ use log::{error, info};
 use spectrum_server::{Server, ServerConfig};
 use tokio_util::sync::CancellationToken;
 
-static RECEIVED_SIGNAL: AtomicBool = AtomicBool::new(false);
+const BANNER: &str = include_str!("asserts/banner.txt");
+const TERMINATED_BY_CTRL_C: i32 = 130;
 
-static BANNER: &str = include_str!("asserts/banner.txt");
+static RECEIVED_SIGNAL: AtomicBool = AtomicBool::new(false);
 
 fn initialize_logger() -> Result<(), anyhow::Error> {
     let log_config_result = fern::Dispatch::new()
@@ -42,7 +43,7 @@ fn signal_handler(server_cancellation_token: &CancellationToken) {
     if RECEIVED_SIGNAL.fetch_or(true, Ordering::SeqCst) {
         // Got signal the second time.
         error!("Received a second signal. Exiting the program forcefully.");
-        std::process::exit(127);
+        std::process::exit(TERMINATED_BY_CTRL_C);
     }
 
     info!("Received a signal. Cancelling all server operations...");
