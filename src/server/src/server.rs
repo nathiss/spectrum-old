@@ -1,20 +1,23 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
-use futures::future::join_all;
+use futures::{future::join_all, Future};
 use log::info;
 use spectrum_network::{Connection, Listener, ListenerBuilder};
 use spectrum_packet::{ClientMessagePacketSerializer, ServerMessagePacketSerializer};
-use tokio::{select, sync::Mutex, task::JoinHandle};
+use tokio::{select, sync::Mutex};
 use tokio_util::sync::CancellationToken;
 
-use crate::{util::calculate_hash, Client, ServerConfig};
+use crate::{
+    util::{calculate_hash, convert_to_future},
+    Client, ServerConfig,
+};
 
 pub struct Server {
     config: ServerConfig,
     new_clients: Arc<Mutex<HashMap<u64, Client>>>,
     cancellation_token: CancellationToken,
 
-    server_join_handles: Vec<JoinHandle<()>>,
+    server_join_futures: Vec<Pin<Box<dyn Future<Output = ()>>>>,
 }
 
 impl Server {
@@ -23,7 +26,7 @@ impl Server {
             config,
             new_clients: Arc::new(Mutex::new(HashMap::new())),
             cancellation_token: CancellationToken::new(),
-            server_join_handles: Vec::new(),
+            server_join_futures: Vec::new(),
         }
     }
 
@@ -67,7 +70,8 @@ impl Server {
             }
         });
 
-        self.server_join_handles.push(listener_handle);
+        self.server_join_futures
+            .push(Box::pin(convert_to_future(listener_handle)));
 
         Ok(())
     }
@@ -76,13 +80,8 @@ impl Server {
         self.cancellation_token.clone()
     }
 
-    pub async fn join(&mut self) {
-        join_all(
-            self.server_join_handles
-                .iter_mut()
-                .map(|handle| async move { handle.await }),
-        )
-        .await;
+    pub async fn join(self) {
+        join_all(self.server_join_futures.into_iter()).await;
     }
 
     #[cfg(test)]
