@@ -31,8 +31,7 @@ impl Server {
 
     pub async fn serve(&mut self) -> Result<(), anyhow::Error> {
         let mut listener = ListenerBuilder::default()
-            .set_interface(self.config.get_serve_interface())
-            .set_port(self.config.get_server_port())
+            .configure(self.config.public_endpoint.clone())
             .build()
             .await?;
 

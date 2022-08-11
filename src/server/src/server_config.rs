@@ -1,15 +1,9 @@
-#[derive(Debug, PartialEq, Clone, Default)]
+use serde::Deserialize;
+use spectrum_network::PublicEndpointConfig;
+
+/// This struct is used to hold server configuration.
+#[derive(Debug, PartialEq, Clone, Default, Deserialize)]
 pub struct ServerConfig {
-    pub serve_interface: String,
-    pub serve_port: u16,
-}
-
-impl ServerConfig {
-    pub fn get_serve_interface(&self) -> &str {
-        &self.serve_interface
-    }
-
-    pub fn get_server_port(&self) -> u16 {
-        self.serve_port
-    }
+    /// This field holds the configuration for the public endpoint.
+    pub public_endpoint: PublicEndpointConfig,
 }

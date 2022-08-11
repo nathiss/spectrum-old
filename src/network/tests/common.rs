@@ -5,7 +5,7 @@ use std::{
 
 use env_logger::Target;
 
-use spectrum_network::{Listener, ListenerBuilder};
+use spectrum_network::{Listener, ListenerBuilder, PublicEndpointConfig};
 
 static NEXT_FREE_PORT_NUMER: AtomicU16 = AtomicU16::new(14242);
 
@@ -13,9 +13,13 @@ pub async fn build_websocket_listener(
     interface: &str,
     port: u16,
 ) -> Result<impl Listener, anyhow::Error> {
+    let configuration = PublicEndpointConfig {
+        serve_interface: interface.to_owned(),
+        serve_port: port,
+    };
+
     ListenerBuilder::default()
-        .set_interface(interface)
-        .set_port(port)
+        .configure(configuration)
         .build()
         .await
 }

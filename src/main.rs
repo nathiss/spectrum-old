@@ -25,11 +25,12 @@ fn initialize_logger() -> Result<(), anyhow::Error> {
     }
 }
 
-fn get_server_configuration() -> ServerConfig {
-    ServerConfig {
-        serve_interface: "127.0.0.1".to_owned(),
-        serve_port: 8080,
-    }
+fn get_server_configuration() -> Result<ServerConfig, anyhow::Error> {
+    let config_file = std::fs::File::options()
+        .read(true)
+        .open("server_config.json")?;
+
+    Ok(serde_json::from_reader(config_file)?)
 }
 
 #[tokio::main]
@@ -38,7 +39,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     info!("{}", BANNER);
 
-    let mut server = Server::new(get_server_configuration());
+    let mut server = Server::new(get_server_configuration()?);
 
     let server_cancellation_token = server.get_cancellation_token();
     ctrlc::set_handler(move || server_cancellation_token.cancel())?;
