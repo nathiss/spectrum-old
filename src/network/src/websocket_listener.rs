@@ -13,8 +13,8 @@ use crate::Connection;
 
 use super::{websocket_connection::WebSocketConnection, Listener};
 
-static DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
-static DEFAULT_WEBSOCKET_CONFIG: Option<WebSocketConfig> = Some(WebSocketConfig {
+const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_WEBSOCKET_CONFIG: Option<WebSocketConfig> = Some(WebSocketConfig {
     max_message_size: Some(16 << 20 /* 16 MiB */),
     max_frame_size: Some(1 << 20 /* 1 MiB */),
     max_send_queue: None, /* unlimited */
