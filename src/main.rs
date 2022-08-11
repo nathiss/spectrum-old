@@ -1,5 +1,10 @@
-use log::info;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use log::{error, info};
 use spectrum_server::{Server, ServerConfig};
+use tokio_util::sync::CancellationToken;
+
+static RECEIVED_SIGNAL: AtomicBool = AtomicBool::new(false);
 
 static BANNER: &str = include_str!("asserts/banner.txt");
 
@@ -33,6 +38,17 @@ fn get_server_configuration() -> Result<ServerConfig, anyhow::Error> {
     Ok(serde_json::from_reader(config_file)?)
 }
 
+fn signal_handler(server_cancellation_token: &CancellationToken) {
+    if RECEIVED_SIGNAL.fetch_or(true, Ordering::SeqCst) {
+        // Got signal the second time.
+        error!("Received a second signal. Exiting the program forcefully.");
+        std::process::exit(127);
+    }
+
+    info!("Received a signal. Cancelling all server operations...");
+    server_cancellation_token.cancel();
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     initialize_logger()?;
@@ -42,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut server = Server::new(get_server_configuration()?);
 
     let server_cancellation_token = server.get_cancellation_token();
-    ctrlc::set_handler(move || server_cancellation_token.cancel())?;
+    ctrlc::set_handler(move || signal_handler(&server_cancellation_token))?;
 
     server.init().await;
 

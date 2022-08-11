@@ -21,3 +21,4 @@ log = "0.4"
 serde_json = "1.0"
 spectrum-server = { path = "src/server" }
 tokio = { version = "1.20", features = ["macros"] }
+tokio-util = "0.7"
