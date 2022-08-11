@@ -5,7 +5,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 /// This trait represents a network connection with a single peer.
 #[async_trait]
-pub trait Connection: Debug + Send {
+pub trait Connection: Debug + Send + Sync {
     /// This method returns a receiving half of the network connection.
     ///
     /// The receiver yields only binary packets sent by the peer. It is finished if the network peer closes its
