@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::time::Duration;
+use std::{sync::Once, time::Duration};
 
 use common::*;
 use log::info;
@@ -10,9 +10,18 @@ use spectrum_network::Listener;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::connect_async;
 
+static INIT_TESTS: Once = Once::new();
+
+fn setup_tests() {
+    INIT_TESTS.call_once(|| {
+        setup_logger();
+    });
+}
+
 #[tokio::test]
 async fn bind_passedInvalidInterface_returnsError() {
     // Arrange
+    setup_tests();
     let port = get_free_port_number();
 
     // Act
@@ -25,6 +34,7 @@ async fn bind_passedInvalidInterface_returnsError() {
 #[tokio::test]
 async fn bind_passedZeroAsPort_returnsError() {
     // Arrange & Act
+    setup_tests();
     let result = build_websocket_listener("127.0.0.1", 0).await;
 
     // Assert
@@ -34,6 +44,7 @@ async fn bind_passedZeroAsPort_returnsError() {
 #[tokio::test]
 async fn bind_passedCorrectParameters_returnsOk() {
     // Arrange
+    setup_tests();
     let port = get_free_port_number();
 
     // Act
@@ -46,6 +57,7 @@ async fn bind_passedCorrectParameters_returnsOk() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accept_once_connectedWithTcp_returnsNone() -> Result<(), anyhow::Error> {
     // Arrange
+    setup_tests();
     let port = get_free_port_number();
 
     let mut listener = build_websocket_listener("127.0.0.1", port).await?;
@@ -66,6 +78,7 @@ async fn accept_once_connectedWithTcp_returnsNone() -> Result<(), anyhow::Error>
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accept_once_connectedWithHttpInvalidHandshake_returnsNone() -> Result<(), anyhow::Error> {
     // Arrange
+    setup_tests();
     let port = get_free_port_number();
 
     let mut listener = build_websocket_listener("127.0.0.1", port).await?;
@@ -91,6 +104,7 @@ async fn accept_once_connectedWithHttpInvalidHandshake_returnsNone() -> Result<(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accept_once_connectedWithWebSocket_returnsSome() -> Result<(), anyhow::Error> {
     // Arrange
+    setup_tests();
     let port = get_free_port_number();
 
     let mut listener = build_websocket_listener("127.0.0.1", port).await?;
@@ -111,7 +125,7 @@ async fn accept_once_connectedWithWebSocket_returnsSome() -> Result<(), anyhow::
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<(), anyhow::Error> {
     // Arrange
-    setup_logger();
+    setup_tests();
     let port = get_free_port_number();
 
     let mut listener = build_websocket_listener("127.0.0.1", port).await?;
@@ -121,7 +135,7 @@ async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<
 
     let client_stream = TcpStream::connect(("127.0.0.1", port)).await?;
 
-    info!("Waiting up to 31 secs for handshake timeout.");
+    info!("Waiting up to 100 millis for handshake timeout.");
 
     // Act
     // The timeout for handshake is 50 millis. We wait up to 100 millis and then we fail.
@@ -131,5 +145,35 @@ async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<
     assert!(result.is_none());
 
     drop(client_stream);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn accept_rawTcpConnectionsBeforeAValidWebSocketConnection_ableToHandleWebSocketConnection(
+) -> Result<(), anyhow::Error> {
+    // Arrange
+    setup_tests();
+    let port = get_free_port_number();
+
+    let mut listener = build_websocket_listener("127.0.0.1", port).await?;
+    listener.set_handshake_timeout(Duration::from_millis(50));
+
+    let handle = tokio::spawn(async move { listener.accept().await });
+
+    let _client_stream1 = TcpStream::connect(("127.0.0.1", port)).await?;
+    let _client_stream2 = TcpStream::connect(("127.0.0.1", port)).await?;
+    let _client_stream3 = TcpStream::connect(("127.0.0.1", port)).await?;
+
+    let (_websocket_stream, ..) = connect_async(format!("ws://127.0.0.1:{}", port)).await?;
+
+    info!("Waiting up to 100 millis for handshake timeout.");
+
+    // Act
+    // The timeout for handshake is 50 millis for each connection. We wait up to 250 millis and then we fail.
+    let result = timeout(Duration::from_millis(250), handle).await??;
+
+    // Assert
+    assert!(result.is_some());
+
     Ok(())
 }
