@@ -65,7 +65,7 @@ impl Client {
 
         let (packet_tx, packet_rx) = unbounded_channel();
         let addr = *self.connection.addr();
-        let client_deserializer = self.client_serializer.clone();
+        let client_deserializer = self.client_serializer;
 
         let handle = tokio::spawn(async move {
             while let Some(raw_data) = raw_data_rx.recv().await {
