@@ -17,6 +17,12 @@ use super::Connection;
 
 struct ShouldCloseReceiver(bool);
 
+impl Into<bool> for ShouldCloseReceiver {
+    fn into(self) -> bool {
+        self.0
+    }
+}
+
 /// This struct represents a WebSocket connection with a single peer.
 #[derive(Debug)]
 pub struct WebSocketConnection {
@@ -95,7 +101,7 @@ impl WebSocketConnection {
                         Some(message) => {
                             let should_be_closed = Self::parse_message_type(message, &tx, &addr);
 
-                            if should_be_closed.0 {
+                            if should_be_closed.into() {
                                 break;
                             }
                         }
