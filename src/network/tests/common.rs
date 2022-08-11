@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::{
+    fs::File,
+    sync::atomic::{AtomicU16, Ordering},
+};
 
 use env_logger::Target;
 
@@ -19,10 +22,19 @@ pub async fn build_websocket_listener(
 
 #[allow(dead_code)] // rust_analyzer for some reason does not see the usage in integration tests ¯\_(ツ)_/¯
 pub fn setup_logger() {
+    let log_file = File::options()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open("./integration_tests.log")
+        .expect("Failed to open log file for spectrum-network integration tests.");
+
     env_logger::builder()
+        .filter(None, log::LevelFilter::Debug)
         .is_test(true)
         .target(Target::Stdout)
         .target(Target::Stderr)
+        .target(Target::Pipe(Box::new(log_file)))
         .init();
 }
 
