@@ -5,7 +5,7 @@ use std::{
 
 use futures::Future;
 use log::{debug, error, warn};
-use spectrum_network::{Connection, WebSocketConnection};
+use spectrum_network::Connection;
 use spectrum_packet::{
     model::{ClientMessage, ServerMessage},
     ClientMessagePacketSerializer, PacketSerializer, ServerMessagePacketSerializer,
@@ -20,7 +20,7 @@ use crate::util::convert_to_future;
 /// messages once they are received from the incoming stream.
 #[derive(Debug)]
 pub struct Client {
-    connection: WebSocketConnection,
+    connection: Box<dyn Connection>,
     packet_rx: Option<UnboundedReceiver<ClientMessage>>,
     client_serializer: ClientMessagePacketSerializer,
     server_serializer: ServerMessagePacketSerializer,
@@ -35,7 +35,7 @@ impl Client {
     /// * `client_serializer` - A serializer/deserializer for the messages received from the network peer.
     /// * `server_serializer` - A serializer/deserializer for the messages sent from the server to the network peer.
     pub fn new(
-        connection: WebSocketConnection,
+        connection: Box<dyn Connection>,
         client_serializer: ClientMessagePacketSerializer,
         server_serializer: ServerMessagePacketSerializer,
     ) -> Self {

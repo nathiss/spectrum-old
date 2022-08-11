@@ -1,11 +1,11 @@
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr};
 
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 /// This trait represents a network connection with a single peer.
 #[async_trait]
-pub trait Connection: Send {
+pub trait Connection: Debug + Send {
     /// This method returns a receiving half of the network connection.
     ///
     /// The receiver yields only binary packets sent by the peer. It is finished if the network peer closes its

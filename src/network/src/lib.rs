@@ -9,4 +9,3 @@ pub use connection::Connection;
 pub use listener::Listener;
 pub use listener_builder::ListenerBuilder;
 pub use listener_configuration::PublicEndpointConfig;
-pub use websocket_connection::WebSocketConnection;

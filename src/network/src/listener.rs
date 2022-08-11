@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::WebSocketConnection;
+use crate::Connection;
 
 /// This trait represents an abstraction over a local network listener.
 #[async_trait]
@@ -15,14 +15,14 @@ pub trait Listener: Sized {
     /// # Returns
     ///
     /// A `WebSocketConnection` instance is returned in case of success or `None` if any error occurs.
-    async fn accept(&mut self) -> Option<WebSocketConnection>;
+    async fn accept(&mut self) -> Option<Box<dyn Connection>>;
 
     /// This method accepts a single incoming connection.
     ///
     /// # Returns
     ///
     /// A `WebSocketConnection` instance is returned in case of success or `None` if any error occurs.
-    async fn accept_once(&mut self) -> Option<WebSocketConnection>;
+    async fn accept_once(&mut self) -> Option<Box<dyn Connection>>;
 
     /// This method is used to set the timeout for the WebSocket handshake.
     ///

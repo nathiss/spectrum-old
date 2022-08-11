@@ -2,7 +2,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use futures::{future::join_all, Future};
 use log::info;
-use spectrum_network::{Connection, Listener, ListenerBuilder};
+use spectrum_network::{Listener, ListenerBuilder};
 use spectrum_packet::{ClientMessagePacketSerializer, ServerMessagePacketSerializer};
 use tokio::{select, sync::Mutex};
 use tokio_util::sync::CancellationToken;

@@ -4,7 +4,7 @@ mod common;
 
 use common::*;
 use futures_util::SinkExt;
-use spectrum_network::{Connection, Listener};
+use spectrum_network::Listener;
 use tokio_tungstenite::connect_async;
 use tungstenite::protocol::Message;
 

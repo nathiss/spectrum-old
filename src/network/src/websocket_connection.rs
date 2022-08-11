@@ -25,7 +25,7 @@ impl Into<bool> for ShouldCloseReceiver {
 
 /// This struct represents a WebSocket connection with a single peer.
 #[derive(Debug)]
-pub struct WebSocketConnection {
+pub(super) struct WebSocketConnection {
     addr: SocketAddr,
     output_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
     input_queue: Option<UnboundedReceiver<Vec<u8>>>,

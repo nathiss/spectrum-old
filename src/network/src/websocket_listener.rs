@@ -9,6 +9,8 @@ use tokio::{
 use tokio_tungstenite::accept_async_with_config;
 use tungstenite::protocol::WebSocketConfig;
 
+use crate::Connection;
+
 use super::{websocket_connection::WebSocketConnection, Listener};
 
 static DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -20,7 +22,7 @@ static DEFAULT_WEBSOCKET_CONFIG: Option<WebSocketConfig> = Some(WebSocketConfig 
 });
 
 enum NewConnectionResult {
-    Ok(WebSocketConnection),
+    Ok(Box<dyn Connection>),
     HandshakeFailed(SocketAddr),
     Timeout(SocketAddr),
     ListenerError,
@@ -35,7 +37,7 @@ pub(super) struct WebSocketListener {
 
 #[async_trait]
 impl Listener for WebSocketListener {
-    async fn accept(&mut self) -> Option<WebSocketConnection> {
+    async fn accept(&mut self) -> Option<Box<dyn Connection>> {
         loop {
             match self.inner_accept().await {
                 NewConnectionResult::Ok(ws_stream) => break Some(ws_stream),
@@ -53,7 +55,7 @@ impl Listener for WebSocketListener {
         }
     }
 
-    async fn accept_once(&mut self) -> Option<WebSocketConnection> {
+    async fn accept_once(&mut self) -> Option<Box<dyn Connection>> {
         match self.inner_accept().await {
             NewConnectionResult::Ok(ws_stream) => Some(ws_stream),
             _ => {
@@ -153,7 +155,7 @@ impl WebSocketListener {
             Ok(Ok(ws_stream)) => {
                 debug!("Handshake with {} completed successfully", addr);
 
-                NewConnectionResult::Ok(WebSocketConnection::new(ws_stream, addr))
+                NewConnectionResult::Ok(Box::new(WebSocketConnection::new(ws_stream, addr)))
             }
             Ok(Err(e)) => {
                 error!("Failed to complete WebSocket handshake with {}", addr);
