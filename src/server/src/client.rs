@@ -62,7 +62,9 @@ impl Client {
     pub async fn write_packet(&mut self, packet: &ServerMessage) -> Result<(), anyhow::Error> {
         let data = self.server_serializer.serialize(packet);
 
-        self.connection.write_bytes(data).await
+        self.connection.write_bytes(data).await?;
+
+        Ok(())
     }
 
     pub fn addr(&self) -> SocketAddr {
