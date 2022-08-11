@@ -12,7 +12,21 @@ use tungstenite::protocol::WebSocketConfig;
 use super::{websocket_connection::WebSocketConnection, Listener};
 
 static DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+static DEFAULT_WEBSOCKET_CONFIG: Option<WebSocketConfig> = Some(WebSocketConfig {
+    max_message_size: Some(16 << 20 /* 16 MiB */),
+    max_frame_size: Some(1 << 20 /* 1 MiB */),
+    max_send_queue: None, /* unlimited */
+    accept_unmasked_frames: false,
+});
 
+enum NewConnectionResult {
+    Ok(WebSocketConnection),
+    HandshakeFailed(SocketAddr),
+    Timeout(SocketAddr),
+    ListenerError,
+}
+
+/// This struct represents a local listener able to accept incoming WebSocket connection.
 #[derive(Debug)]
 pub(super) struct WebSocketListener {
     tcp_listener: TcpListener,
@@ -24,18 +38,29 @@ impl Listener for WebSocketListener {
     async fn accept(&mut self) -> Option<WebSocketConnection> {
         loop {
             match self.inner_accept().await {
-                Ok(Some(ws_stream)) => break Some(ws_stream),
-                Ok(None) => { /* We continue and wait for the next valid connection. */ }
-                Err(_) => break None,
+                NewConnectionResult::Ok(ws_stream) => break Some(ws_stream),
+                NewConnectionResult::HandshakeFailed(_addr)
+                | NewConnectionResult::Timeout(_addr) => {
+                    // The error was already logged internally by `inner_accept`. We await the next successful
+                    // WebSocket connection.
+                }
+                NewConnectionResult::ListenerError => {
+                    // The error was already logged internally by `inner_accept.` In case of internal listener error we
+                    // cannot accept new connection.
+                    break None;
+                }
             }
         }
     }
 
     async fn accept_once(&mut self) -> Option<WebSocketConnection> {
         match self.inner_accept().await {
-            Ok(Some(ws_stream)) => Some(ws_stream),
-            Ok(None) => None,
-            Err(_) => None,
+            NewConnectionResult::Ok(ws_stream) => Some(ws_stream),
+            _ => {
+                // Certain errors were already logged internally by `inner_accept`. No need to log them again.
+
+                None
+            }
         }
     }
 
@@ -45,6 +70,18 @@ impl Listener for WebSocketListener {
 }
 
 impl WebSocketListener {
+    /// This method is used to construct `WebSocketListener` and to bind the internal TCP listener to the interface and
+    /// the port.
+    ///
+    /// # Arguments
+    ///
+    /// * `interface` - A local interface to which the internal listener will try to bind to. It cannot be empty.
+    /// * `port` - A local port number to which the internal listener will try to bind to. It cannot be zero.
+    ///
+    /// # Returns
+    ///
+    /// An instance of `Self` is returned in case of success or an error describing a failed constraint or an internal
+    /// error if the operation fails.
     pub(super) async fn bind(interface: &str, port: u16) -> Result<Self, anyhow::Error> {
         if interface.is_empty() {
             error!("Given listener interface is empty.");
@@ -69,40 +106,54 @@ impl WebSocketListener {
         }
     }
 
-    async fn inner_accept(&self) -> Result<Option<WebSocketConnection>, anyhow::Error> {
+    /// This method is used to do a single accept of the local listener and then convert the incoming TCP connection
+    /// into a `WebSocketConnection`.
+    ///
+    /// # Returns
+    ///
+    /// A new `WebSocketConnection` is returned in case of success. Otherwise the error can be returned for a number of
+    /// reasons:
+    /// * `NewConnectionResult::HandshakeFailed` - An error occurred during the WebSocket handshake with the peer.
+    /// * `NewConnectionResult::Timeout` - Failed to complete the WebSocket handshake within the given timeout.
+    /// * `NewConnectionResult::ListenerError` - An internal error of the local listener rendering it unable to accept
+    ///                                          new connections.
+    async fn inner_accept(&self) -> NewConnectionResult {
         match self.tcp_listener.accept().await {
-            Ok((stream, addr)) => match self.handle_new_stream(stream, addr).await {
-                Some(ws_stream) => Ok(Some(ws_stream)),
-                None => Ok(None),
-            },
+            Ok((stream, addr)) => self.handle_new_stream(stream, addr).await,
             Err(e) => {
                 error!(
                     "Received an error while listening for incoming connections: {}",
                     e
                 );
 
-                Err(anyhow::Error::from(e))
+                NewConnectionResult::ListenerError
             }
         }
     }
 
-    async fn handle_new_stream(
-        &self,
-        stream: TcpStream,
-        addr: SocketAddr,
-    ) -> Option<WebSocketConnection> {
-        debug!("New connection from: {}", addr);
+    /// This method is used to process a single TCP connection and convert it into a valid `WebSocketConnection`.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - A TCP stream connected to the network peer.
+    /// * `addr` - An internet socket address of the connected peer.
+    ///
+    /// # Returns
+    ///
+    /// A new `WebSocketConnection` is returned in case of success or `addr` if any error occurred.
+    async fn handle_new_stream(&self, stream: TcpStream, addr: SocketAddr) -> NewConnectionResult {
+        debug!("New TCP connection from: {}", addr);
 
         match timeout(
             self.handshake_timeout,
-            accept_async_with_config(stream, get_websocket_config()),
+            accept_async_with_config(stream, DEFAULT_WEBSOCKET_CONFIG),
         )
         .await
         {
             Ok(Ok(ws_stream)) => {
                 debug!("Handshake with {} completed successfully", addr);
 
-                Some(WebSocketConnection::new(ws_stream, addr))
+                NewConnectionResult::Ok(WebSocketConnection::new(ws_stream, addr))
             }
             Ok(Err(e)) => {
                 error!("Failed to complete WebSocket handshake with {}", addr);
@@ -111,27 +162,17 @@ impl WebSocketListener {
                     addr, e
                 );
 
-                None
+                NewConnectionResult::HandshakeFailed(addr)
             }
-            Err(e) => {
+            Err(_e) => {
                 error!(
-                    "The handshake from {} failed to complete in {}. Error: {}",
+                    "The handshake from {} failed to complete in {}.",
                     addr,
-                    self.handshake_timeout.as_secs(),
-                    e
+                    self.handshake_timeout.as_secs()
                 );
 
-                None
+                NewConnectionResult::Timeout(addr)
             }
         }
     }
-}
-
-#[inline]
-fn get_websocket_config() -> Option<WebSocketConfig> {
-    Some(WebSocketConfig {
-        max_message_size: Some(16 << 20 /* 16 MiB */),
-        max_frame_size: Some(1 << 20 /* 1 MiB */),
-        ..Default::default()
-    })
 }
