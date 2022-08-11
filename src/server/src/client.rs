@@ -134,3 +134,180 @@ impl Hash for Client {
         self.connection.addr().hash(state);
     }
 }
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use std::{net::IpAddr, sync::Arc, time::Duration};
+
+    use async_trait::async_trait;
+    use tokio::sync::{mpsc::error::TryRecvError, Mutex};
+
+    use super::*;
+    use spectrum_packet::model::{
+        client_message::ClientMessageData, server_leave::StatusCode,
+        server_message::ServerMessageData, *,
+    };
+
+    #[derive(Debug)]
+    struct MockConnection {
+        pub incoming_data_channel: Option<UnboundedReceiver<Vec<u8>>>,
+        pub data: Arc<Mutex<Vec<u8>>>,
+        pub addr: SocketAddr,
+        pub write_bytes_should_fail: bool,
+    }
+
+    #[async_trait]
+    impl Connection for MockConnection {
+        fn get_incoming_data_channel(&mut self) -> UnboundedReceiver<Vec<u8>> {
+            self.incoming_data_channel.take().unwrap()
+        }
+
+        async fn write_bytes(&mut self, data: Vec<u8>) -> Result<(), anyhow::Error> {
+            if self.write_bytes_should_fail {
+                return Err(anyhow::Error::msg("failed"));
+            }
+
+            self.data.lock().await.clone_from(&data);
+
+            Ok(())
+        }
+
+        fn addr(&self) -> &SocketAddr {
+            &self.addr
+        }
+    }
+
+    #[test]
+    fn addr_givenValidConnection_addrIsProperlyRetrieved() {
+        // Arrange
+        let addr = SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080);
+
+        let connection = MockConnection {
+            addr: addr,
+            write_bytes_should_fail: false,
+            data: Arc::new(Mutex::new(Vec::new())),
+            incoming_data_channel: None,
+        };
+
+        // Act
+        let client = Client::new(Box::new(connection), Default::default(), Default::default());
+
+        // Assert
+        assert_eq!(addr, client.addr());
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_packet_channel_callBeforeOpenPackageStream_panics() {
+        // Arrange
+        let mut connection = MockConnection {
+            addr: SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080),
+            write_bytes_should_fail: false,
+            data: Arc::new(Mutex::new(Vec::new())),
+            incoming_data_channel: None,
+        };
+
+        // Act
+        connection.get_incoming_data_channel();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn open_package_stream_sendPacketsBeforePackageStreamConstruction_yieldsPreviousPackets()
+    {
+        // Arrange
+        let (tx, rx) = unbounded_channel();
+
+        let connection = MockConnection {
+            addr: SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080),
+            write_bytes_should_fail: false,
+            data: Arc::new(Mutex::new(Vec::new())),
+            incoming_data_channel: Some(rx),
+        };
+
+        let mut client = Client::new(Box::new(connection), Default::default(), Default::default());
+
+        let client_message = ClientMessage {
+            client_message_data: Some(ClientMessageData::WelcomeMessage(ClientWelcome {
+                nick: "foo".to_owned(),
+                game_id: Some("bar".to_owned()),
+            })),
+        };
+
+        let client_message = ClientMessagePacketSerializer::default().serialize(&client_message);
+
+        tx.send(client_message.clone()).unwrap();
+        tx.send(client_message).unwrap();
+
+        let _ = client.open_package_stream().await;
+
+        // Act
+        let mut packet_rx = client.get_packet_channel();
+
+        // Assert
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert!(packet_rx.try_recv().is_ok());
+        assert!(packet_rx.try_recv().is_ok());
+        assert_eq!(TryRecvError::Empty, packet_rx.try_recv().err().unwrap());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn write_packet_connectionSendBytesFails_returnsError() {
+        // Arrange
+        let connection = MockConnection {
+            addr: SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080),
+            write_bytes_should_fail: true,
+            data: Arc::new(Mutex::new(Vec::new())),
+            incoming_data_channel: None,
+        };
+
+        let mut client = Client::new(Box::new(connection), Default::default(), Default::default());
+
+        // Act
+        let result = client
+            .write_packet(&ServerMessage {
+                server_message_data: None,
+            })
+            .await;
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn write_packet_sendsPackage_connectionReceivesTheSameBytes() -> Result<(), anyhow::Error>
+    {
+        // Arrange
+        let data_container = Arc::new(Mutex::new(Vec::new()));
+
+        let connection = MockConnection {
+            addr: SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080),
+            write_bytes_should_fail: false,
+            data: data_container.clone(),
+            incoming_data_channel: None,
+        };
+
+        let mut client = Client::new(Box::new(connection), Default::default(), Default::default());
+
+        let server_message = &ServerMessage {
+            server_message_data: Some(ServerMessageData::LeaveMessage(ServerLeave {
+                status_code: StatusCode::Success.into(),
+            })),
+        };
+
+        let serialized_server_message =
+            ServerMessagePacketSerializer::default().serialize(&server_message);
+
+        // Act
+        client.write_packet(&server_message).await?;
+
+        // Assert
+        assert_eq!(
+            serialized_server_message,
+            data_container.lock().await.clone()
+        );
+
+        Ok(())
+    }
+}
