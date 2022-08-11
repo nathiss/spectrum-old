@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures::Future;
+use log::error;
 use tokio::task::JoinHandle;
 
 /// This is a helper function used to calculate hash of the given object.
@@ -32,8 +33,13 @@ pub(crate) fn calculate_hash<T: Hash>(t: &T) -> u64 {
 /// # Returns
 ///
 /// A `impl Future<Output = ()>` that wraps around `handle` is returned.
+#[allow(clippy::manual_async_fn)]
 pub(crate) fn convert_to_future(handle: JoinHandle<()>) -> impl Future<Output = ()> {
-    async move { drop(handle.await) }
+    async move {
+        if let Err(e) = handle.await {
+            error!("Error occurred when trying to join a handle: {}", e);
+        }
+    }
 }
 
 #[cfg(test)]
