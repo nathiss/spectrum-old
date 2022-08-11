@@ -47,7 +47,7 @@ pub(crate) fn convert_to_future(handle: JoinHandle<()>) -> impl Future<Output = 
 mod tests {
     use std::time::Duration;
 
-    use futures::FutureExt;
+    use futures::{future, FutureExt};
     use tokio::time::timeout;
 
     use super::*;
@@ -68,7 +68,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn convert_to_future_passedAlreadyCompletedHandle_completesImmediately() {
         // Arrange
-        let handle = tokio::spawn(async {});
+        let handle = tokio::spawn(future::ready(()));
 
         // Act
         let future = convert_to_future(handle);
