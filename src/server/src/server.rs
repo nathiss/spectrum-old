@@ -26,7 +26,7 @@ impl From<u64> for ClientMapKey {
 
 pub struct Server {
     config: ServerConfig,
-    new_clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
+    clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
     cancellation_token: CancellationToken,
 
     server_join_futures: Vec<Pin<Box<dyn Future<Output = ()>>>>,
@@ -36,7 +36,7 @@ impl Server {
     pub fn new(config: ServerConfig) -> Self {
         Self {
             config,
-            new_clients: Arc::new(RwLock::new(HashMap::new())),
+            clients: Arc::new(RwLock::new(HashMap::new())),
             cancellation_token: CancellationToken::new(),
             server_join_futures: Vec::new(),
         }
@@ -51,7 +51,7 @@ impl Server {
             .await?;
 
         let cancellation_token = self.cancellation_token.clone();
-        let new_clients = self.new_clients.clone();
+        let clients = self.clients.clone();
 
         let listener_handle = tokio::spawn(async move {
             loop {
@@ -79,11 +79,11 @@ impl Server {
                                 Self::create_receive_task(
                                     key,
                                     packet_rx, client.addr(),
-                                    new_clients.clone(),
+                                    clients.clone(),
                                     cancellation_token.clone()
                                 ).await;
 
-                                new_clients.write().await.insert(key, client);
+                                clients.write().await.insert(key, client);
                             },
                             None => {
                                 // This means that an error occurred internally inside the listener.
