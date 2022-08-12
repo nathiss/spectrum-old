@@ -107,7 +107,6 @@ impl Server {
     }
 
     pub async fn join(self) {
-        // FIXME: When calling it consumes the collection and future elements are not added to join_all.
         join_all(self.server_join_futures.into_iter()).await;
     }
 
