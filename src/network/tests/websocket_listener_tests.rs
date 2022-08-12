@@ -138,8 +138,8 @@ async fn accept_once_connectedWithTcpAndHang_timeoutsAndReturnsNone() -> Result<
     info!("Waiting up to 100 millis for handshake timeout.");
 
     // Act
-    // The timeout for handshake is 50 millis. We wait up to 100 millis and then we fail.
-    let result = timeout(Duration::from_millis(100), handle).await??;
+    // The timeout for handshake is 50 millis. We wait up to 150 millis and then we fail.
+    let result = timeout(Duration::from_millis(150), handle).await??;
 
     // Assert
     assert!(result.is_none());
