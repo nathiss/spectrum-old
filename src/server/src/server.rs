@@ -1,10 +1,13 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
 
 use futures::{future::join_all, Future};
-use log::info;
+use log::{debug, info};
 use spectrum_network::{Listener, ListenerBuilder};
-use spectrum_packet::{ClientMessagePacketSerializer, ServerMessagePacketSerializer};
-use tokio::{select, sync::Mutex};
+use spectrum_packet::model::ClientMessage;
+use tokio::{
+    select,
+    sync::{mpsc::UnboundedReceiver, RwLock},
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -12,9 +15,18 @@ use crate::{
     Client, ServerConfig,
 };
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+struct ClientMapKey(u64);
+
+impl From<u64> for ClientMapKey {
+    fn from(key: u64) -> Self {
+        Self(key)
+    }
+}
+
 pub struct Server {
     config: ServerConfig,
-    new_clients: Arc<Mutex<HashMap<u64, Client>>>,
+    new_clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
     cancellation_token: CancellationToken,
 
     server_join_futures: Vec<Pin<Box<dyn Future<Output = ()>>>>,
@@ -24,7 +36,7 @@ impl Server {
     pub fn new(config: ServerConfig) -> Self {
         Self {
             config,
-            new_clients: Arc::new(Mutex::new(HashMap::new())),
+            new_clients: Arc::new(RwLock::new(HashMap::new())),
             cancellation_token: CancellationToken::new(),
             server_join_futures: Vec::new(),
         }
@@ -53,17 +65,31 @@ impl Server {
                             Some(connection) => {
                                 info!("New WebSocket connection from: {}", connection.addr());
 
-                                let client = Client::new(
+                                let mut client = Client::new(
                                     connection,
-                                    ClientMessagePacketSerializer::default(),
-                                    ServerMessagePacketSerializer::default(),
+                                    Default::default(),
+                                    Default::default(),
                                 );
 
-                                new_clients.lock()
-                                    .await
-                                    .insert(calculate_hash(&client), client);
+                                let key = ClientMapKey::from(calculate_hash(&client));
+
+                                let _raw_packets_future = client.open_package_stream(cancellation_token.clone()).await;
+                                let packet_rx = client.get_packet_channel();
+
+                                Self::create_receive_task(
+                                    key,
+                                    packet_rx, client.addr(),
+                                    new_clients.clone(),
+                                    cancellation_token.clone()
+                                ).await;
+
+                                new_clients.write().await.insert(key, client);
                             },
-                            None => {}
+                            None => {
+                                // This means that an error occurred internally inside the listener.
+                                // We cannot accept new connections, so we exit.
+                                break;
+                            }
                         }
                     }
                 }
@@ -81,7 +107,40 @@ impl Server {
     }
 
     pub async fn join(self) {
+        // FIXME: When calling it consumes the collection and future elements are not added to join_all.
         join_all(self.server_join_futures.into_iter()).await;
+    }
+
+    async fn create_receive_task(
+        key: ClientMapKey,
+        mut packet_rx: UnboundedReceiver<ClientMessage>,
+        addr: SocketAddr,
+        new_clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
+        cancellation_token: CancellationToken,
+    ) {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    biased;
+
+                    _ = cancellation_token.cancelled() => {
+                        info!("The sever has been cancelled. Receiving task for {} will now exit.", addr);
+
+                        new_clients.write().await.remove(&key);
+                        break;
+                    }
+
+                    message = packet_rx.recv() => {
+                        if let None = message {
+                            debug!("Underlying Connection was closed. Receiving task for {} will now exit.", addr);
+                            break;
+                        }
+
+                        // TODO: handle message
+                    }
+                }
+            }
+        });
     }
 
     #[cfg(test)]

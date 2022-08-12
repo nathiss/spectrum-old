@@ -3,16 +3,17 @@ use std::{
     net::SocketAddr,
 };
 
-use futures::Future;
 use log::{debug, error, warn};
 use spectrum_network::Connection;
 use spectrum_packet::{
     model::{ClientMessage, ServerMessage},
     ClientMessagePacketSerializer, PacketSerializer, ServerMessagePacketSerializer,
 };
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-
-use crate::util::convert_to_future;
+use tokio::{
+    select,
+    sync::mpsc::{unbounded_channel, UnboundedReceiver},
+};
+use tokio_util::sync::CancellationToken;
 
 /// This struct is a mid-level representation of a connected network peer.
 ///
@@ -52,56 +53,72 @@ impl Client {
     /// The conversion is run in a loop which exists if the underlying stream is exhausted. The loop is wrapped into an
     /// asynchronous task and the handle of that task is returned.
     ///
+    /// # Arguments
+    ///
+    /// * `cancellation_token` - A cancellation token for this Future. This method will await internally on the token
+    ///                          and when it's cancelled, then it completes the future immediately.
+    ///
     /// # Panics
     ///
     /// Due to the fact that this method internally uses `Connection::get_incoming_data_channel()` method, it can only
     /// be called once. The second call of this method will result in a panic.
-    ///
-    /// # Returns
-    ///
-    /// A handle into the asynchronous conversion task is returned.
-    pub async fn open_package_stream(&mut self) -> impl Future<Output = ()> {
+    pub async fn open_package_stream(&mut self, cancellation_token: CancellationToken) {
         let mut raw_data_rx = self.connection.get_incoming_data_channel();
 
         let (packet_tx, packet_rx) = unbounded_channel();
         let addr = *self.connection.addr();
         let client_deserializer = self.client_serializer;
 
-        let handle = tokio::spawn(async move {
-            while let Some(raw_data) = raw_data_rx.recv().await {
-                match client_deserializer.deserialize(raw_data) {
-                    Ok(message) => {
-                        if let Err(_e) = packet_tx.send(message) {
-                            warn!(
-                                "Failed to send message from {} to the channel. \
-                                Probably the receiving half has been closed",
-                                addr
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to deserialize data from {}", addr);
-                        debug!("Failed to deserialize data from {}. Error: {}", addr, e);
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    biased;
 
+                    _ = cancellation_token.cancelled() => {
+                        debug!("Stream of raw packets for {} has been cancelled. Returning immediately.", addr);
                         break;
+                    }
+
+                    raw_data = raw_data_rx.recv() => {
+                        match raw_data {
+                            Some(raw_data) => {
+                                match client_deserializer.deserialize(raw_data) {
+                                    Ok(message) => {
+                                        if let Err(_e) = packet_tx.send(message) {
+                                            warn!(
+                                                "Failed to send message from {} to the channel. \
+                                                Probably the receiving half has been closed",
+                                                addr
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to deserialize data from {}", addr);
+                                        debug!("Failed to deserialize data from {}. Error: {}", addr, e);
+
+                                        break;
+                                    }
+                                }
+                            }
+                            None => {
+                                // This means that the packet channel is exhausted.
+                                break;
+                            }
+                        }
                     }
                 }
             }
-
-            // This means that either we broke the loop due to the deserializer error or the packet channel is
-            // exhausted. Either way we finish.
         });
 
         self.packet_rx = Some(packet_rx);
-
-        convert_to_future(handle)
     }
 
     /// This method returns a receiving half of the incoming messages stream.
     ///
     /// # Panics
     ///
-    /// The internal receiver is consumed by this method. It panics if called more than once.
+    /// The internal receiver is consumed by this method. It panics if called more than once or if it was called before
+    /// the stream was properly setup by `open_package_stream`.
     pub fn get_packet_channel(&mut self) -> UnboundedReceiver<ClientMessage> {
         match self.packet_rx.take() {
             Some(queue) => queue,
@@ -239,7 +256,7 @@ mod tests {
         tx.send(client_message.clone()).unwrap();
         tx.send(client_message).unwrap();
 
-        let _ = client.open_package_stream().await;
+        let _ = client.open_package_stream(CancellationToken::new()).await;
 
         // Act
         let mut packet_rx = client.get_packet_channel();
@@ -250,6 +267,51 @@ mod tests {
         assert!(packet_rx.try_recv().is_ok());
         assert!(packet_rx.try_recv().is_ok());
         assert_eq!(TryRecvError::Empty, packet_rx.try_recv().err().unwrap());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn open_package_stream_channelReceivedPacketsAfterCancelling_yieldsNoPreviousPackets() {
+        // Arrange
+        let (tx, rx) = unbounded_channel();
+
+        let connection = MockConnection {
+            addr: SocketAddr::new(IpAddr::from([127u8, 0u8, 0u8, 1u8]), 8080),
+            write_bytes_should_fail: false,
+            data: Arc::new(Mutex::new(Vec::new())),
+            incoming_data_channel: Some(rx),
+        };
+
+        let mut client = Client::new(Box::new(connection), Default::default(), Default::default());
+
+        let client_message = ClientMessage {
+            client_message_data: Some(ClientMessageData::WelcomeMessage(ClientWelcome {
+                nick: "foo".to_owned(),
+                game_id: Some("bar".to_owned()),
+            })),
+        };
+
+        let client_message = ClientMessagePacketSerializer::default().serialize(&client_message);
+
+        let token = CancellationToken::new();
+
+        let _ = client.open_package_stream(token.clone()).await;
+
+        // Act
+        token.cancel();
+
+        tx.send(client_message.clone()).unwrap();
+        tx.send(client_message).unwrap();
+
+        let mut packet_rx = client.get_packet_channel();
+
+        // Assert
+        // Without this timeout, the error was `TryRecvError::Empty`, which is still acceptable in this case.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert_eq!(
+            TryRecvError::Disconnected,
+            packet_rx.try_recv().err().unwrap()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
