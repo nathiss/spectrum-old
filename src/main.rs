@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use log::{error, info};
+use log::{error, info, warn};
 use spectrum_server::{Server, ServerConfig};
 use tokio_util::sync::CancellationToken;
 
@@ -46,7 +46,7 @@ fn signal_handler(server_cancellation_token: &CancellationToken) {
         std::process::exit(TERMINATED_BY_CTRL_C);
     }
 
-    info!("Received a signal. Cancelling all server operations...");
+    warn!("Received a signal. Cancelling all server operations...");
     server_cancellation_token.cancel();
 }
 

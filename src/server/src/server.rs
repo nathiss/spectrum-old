@@ -1,12 +1,15 @@
 use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
 
-use futures::{future::join_all, Future};
+use futures::Future;
 use log::{debug, info};
 use spectrum_network::{Listener, ListenerBuilder};
 use spectrum_packet::model::ClientMessage;
 use tokio::{
     select,
-    sync::{mpsc::UnboundedReceiver, RwLock},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        RwLock,
+    },
 };
 use tokio_util::sync::CancellationToken;
 
@@ -29,16 +32,20 @@ pub struct Server {
     clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
     cancellation_token: CancellationToken,
 
-    server_join_futures: Vec<Pin<Box<dyn Future<Output = ()>>>>,
+    server_join_futures_tx: UnboundedSender<Pin<Box<dyn Future<Output = ()>>>>,
+    server_join_futures_rx: UnboundedReceiver<Pin<Box<dyn Future<Output = ()>>>>,
 }
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
+        let (tx, rx) = unbounded_channel();
+
         Self {
             config,
             clients: Arc::new(RwLock::new(HashMap::new())),
             cancellation_token: CancellationToken::new(),
-            server_join_futures: Vec::new(),
+            server_join_futures_tx: tx,
+            server_join_futures_rx: rx,
         }
     }
 
@@ -96,8 +103,11 @@ impl Server {
             }
         });
 
-        self.server_join_futures
-            .push(Box::pin(convert_to_future(listener_handle)));
+        // It is safe to drop `Result<(), Error>` here, because the receiver lives as long as `self`.
+        drop(
+            self.server_join_futures_tx
+                .send(Box::pin(convert_to_future(listener_handle))),
+        );
 
         Ok(())
     }
@@ -106,8 +116,12 @@ impl Server {
         self.cancellation_token.clone()
     }
 
-    pub async fn join(self) {
-        join_all(self.server_join_futures.into_iter()).await;
+    pub async fn join(mut self) {
+        drop(self.server_join_futures_tx);
+
+        while let Some(future) = self.server_join_futures_rx.recv().await {
+            future.await;
+        }
     }
 
     async fn create_receive_task(
@@ -123,7 +137,7 @@ impl Server {
                     biased;
 
                     _ = cancellation_token.cancelled() => {
-                        info!("The sever has been cancelled. Receiving task for {} will now exit.", addr);
+                        debug!("The sever has been cancelled. Receiving task for {} will now exit.", addr);
 
                         new_clients.write().await.remove(&key);
                         break;
