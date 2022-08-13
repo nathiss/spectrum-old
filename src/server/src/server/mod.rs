@@ -1,9 +1,12 @@
-use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
+mod client_map_key;
+mod server_util;
+
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use futures::Future;
-use log::{debug, info};
+use log::info;
 use spectrum_network::{Listener, ListenerBuilder};
-use spectrum_packet::model::ClientMessage;
+
 use tokio::{
     select,
     sync::{
@@ -18,14 +21,7 @@ use crate::{
     Client, ServerConfig,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-struct ClientMapKey(u64);
-
-impl From<u64> for ClientMapKey {
-    fn from(key: u64) -> Self {
-        Self(key)
-    }
-}
+use self::client_map_key::ClientMapKey;
 
 pub struct Server {
     config: ServerConfig,
@@ -83,7 +79,7 @@ impl Server {
                                 let _raw_packets_future = client.open_package_stream(cancellation_token.clone()).await;
                                 let packet_rx = client.get_packet_channel();
 
-                                Self::create_receive_task(
+                                server_util::create_receive_task(
                                     key,
                                     packet_rx, client.addr(),
                                     clients.clone(),
@@ -122,38 +118,6 @@ impl Server {
         while let Some(future) = self.server_join_futures_rx.recv().await {
             future.await;
         }
-    }
-
-    async fn create_receive_task(
-        key: ClientMapKey,
-        mut packet_rx: UnboundedReceiver<ClientMessage>,
-        addr: SocketAddr,
-        new_clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
-        cancellation_token: CancellationToken,
-    ) {
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    biased;
-
-                    _ = cancellation_token.cancelled() => {
-                        debug!("The sever has been cancelled. Receiving task for {} will now exit.", addr);
-
-                        new_clients.write().await.remove(&key);
-                        break;
-                    }
-
-                    message = packet_rx.recv() => {
-                        if let None = message {
-                            debug!("Underlying Connection was closed. Receiving task for {} will now exit.", addr);
-                            break;
-                        }
-
-                        // TODO: handle message
-                    }
-                }
-            }
-        });
     }
 
     #[cfg(test)]
