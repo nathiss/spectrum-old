@@ -13,6 +13,7 @@ sm = "0.9"
 tokio = { version = "1.20", features = ["macros", "sync"] }
 tokio-util = "0.7"
 serde = { version = "1.0", features = ["derive"] }
+spectrum-game = { path = "../game" }
 spectrum-network = { path = "../network" }
 spectrum-packet = { path = "../packet" }
 

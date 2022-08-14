@@ -1,10 +1,11 @@
 mod client_map_key;
 mod server_util;
 
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use futures::Future;
 use log::info;
+use spectrum_game::{DefaultGameState, GameState};
 use spectrum_network::{Listener, ListenerBuilder};
 
 use tokio::{
@@ -16,17 +17,12 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    util::{calculate_hash, convert_to_future},
-    Client, ServerConfig,
-};
-
-use self::client_map_key::ClientMapKey;
+use crate::{util::convert_to_future, Client, ServerConfig};
 
 pub struct Server {
     config: ServerConfig,
-    clients: Arc<RwLock<HashMap<ClientMapKey, Client>>>,
     cancellation_token: CancellationToken,
+    game_state: Arc<RwLock<Box<dyn GameState>>>,
 
     server_join_futures_tx: UnboundedSender<Pin<Box<dyn Future<Output = ()>>>>,
     server_join_futures_rx: UnboundedReceiver<Pin<Box<dyn Future<Output = ()>>>>,
@@ -34,12 +30,19 @@ pub struct Server {
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
+        let cancellation_token = CancellationToken::new();
+
+        let game_state: Box<dyn GameState> = Box::new(DefaultGameState::new(
+            config.game_state.clone(),
+            cancellation_token.clone(),
+        ));
+
         let (tx, rx) = unbounded_channel();
 
         Self {
             config,
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            cancellation_token: CancellationToken::new(),
+            cancellation_token,
+            game_state: Arc::new(RwLock::new(game_state)),
             server_join_futures_tx: tx,
             server_join_futures_rx: rx,
         }
@@ -54,7 +57,7 @@ impl Server {
             .await?;
 
         let cancellation_token = self.cancellation_token.clone();
-        let clients = self.clients.clone();
+        let game_state = self.game_state.clone();
 
         let listener_handle = tokio::spawn(async move {
             loop {
@@ -74,19 +77,13 @@ impl Server {
                                     Default::default(),
                                 );
 
-                                let key = ClientMapKey::from(calculate_hash(&client));
-
-                                let _raw_packets_future = client.open_package_stream(cancellation_token.clone()).await;
-                                let packet_rx = client.get_packet_channel();
+                                client.open_package_stream(cancellation_token.clone()).await;
 
                                 server_util::create_receive_task(
-                                    key,
-                                    packet_rx, client.addr(),
-                                    clients.clone(),
+                                    game_state.clone(),
+                                    client,
                                     cancellation_token.clone()
                                 ).await;
-
-                                clients.write().await.insert(key, client);
                             },
                             None => {
                                 // This means that an error occurred internally inside the listener.

@@ -1125,6 +1125,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "spectrum-game"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "spectrum-packet",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "spectrum-network"
 version = "0.1.0"
 dependencies = [
@@ -1160,6 +1171,7 @@ dependencies = [
  "log",
  "serde",
  "sm",
+ "spectrum-game",
  "spectrum-network",
  "spectrum-packet",
  "test-case",
@@ -1438,6 +1450,28 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+dependencies = [
+ "getrandom",
+ "rand",
+ "uuid-macro-internal",
+]
+
+[[package]]
+name = "uuid-macro-internal"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "548f7181a5990efa50237abb7ebca410828b57a8955993334679f8b50b35c97d"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
 
 [[package]]
 name = "vcpkg"

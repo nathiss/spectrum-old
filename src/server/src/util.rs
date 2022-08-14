@@ -16,6 +16,7 @@ use tokio::task::JoinHandle;
 /// # Returns
 ///
 /// A `u64` representation of the calculated hash is returned.
+#[allow(dead_code)]
 pub(crate) fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut hasher = DefaultHasher::new();
 
