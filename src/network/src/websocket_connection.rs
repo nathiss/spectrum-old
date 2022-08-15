@@ -169,7 +169,7 @@ impl WebSocketConnection {
                 ShouldCloseReceiver(true)
             }
             _ => {
-                error!("Got a message from {} which is nighter a binary message not a control message.", addr);
+                error!("Got a message from {} which is neither a binary message nor a control message.", addr);
 
                 ShouldCloseReceiver(true)
             }
