@@ -2,6 +2,7 @@
     "cSpell.words": [
         "appenders",
         "chrono",
+        "consts",
         "Hasher",
         "oneof",
         "prost",
@@ -11,7 +12,12 @@
         "protos",
         "reqwest",
         "serde",
+        "SIGINT",
+        "SIGQUIT",
+        "SIGTERM",
         "tungstenite"
     ],
-    "cSpell.enableFiletypes": ["proto3"]
+    "cSpell.enableFiletypes": [
+        "proto3"
+    ]
 }
