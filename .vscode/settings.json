@@ -4,6 +4,7 @@
         "chrono",
         "Hasher",
         "oneof",
+        "prost",
         "proto",
         "protobuf",
         "PROTOC",
