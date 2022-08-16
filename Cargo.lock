@@ -1128,6 +1128,7 @@ dependencies = [
 name = "spectrum-game"
 version = "0.1.0"
 dependencies = [
+ "log",
  "serde",
  "spectrum-packet",
  "tokio",
