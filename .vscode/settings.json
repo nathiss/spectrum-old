@@ -3,6 +3,7 @@
         "appenders",
         "chrono",
         "consts",
+        "dashmap",
         "Hasher",
         "oneof",
         "prost",

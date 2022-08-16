@@ -61,7 +61,7 @@ fn spawn_receiving_task(
                                         break;
                                     }
 
-                                    match game_state.write().await.join_game(welcome_message, packet_rx, packet_tx) {
+                                    match game_state.read().await.join_game(welcome_message, packet_rx, packet_tx) {
                                         spectrum_game::JoinGameResult::Ok => break,
                                         spectrum_game::JoinGameResult::GameIsFull(rx, tx) => {
                                             packet_rx = rx;
@@ -81,6 +81,12 @@ fn spawn_receiving_task(
 
                                             let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::NickTaken));
                                         },
+                                        spectrum_game::JoinGameResult::BadRequest(_rx, tx) => {
+                                            packet_tx = tx;
+
+                                            let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::BadRequest));
+                                            break;
+                                        }
                                     }
                                 }
                                 _ => {
@@ -119,7 +125,7 @@ fn create_send_task(mut client: Client) -> UnboundedSender<ServerMessage> {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use std::{net::IpAddr, time::Duration};
+    use std::{cell::RefCell, net::IpAddr, time::Duration};
 
     use spectrum_game::JoinGameResult;
     use spectrum_packet::model::{server_message::ServerMessageData, ClientLeave, ClientWelcome};
@@ -143,28 +149,30 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct MockGameState {
-        pub(self) welcome_message: Option<ClientWelcome>,
-        pub(self) packet_rx: Option<UnboundedReceiver<ClientMessage>>,
-        pub(self) packet_tx: Option<UnboundedSender<ServerMessage>>,
-        pub(self) join_game_result: Option<JoinGameResult>,
+        pub(self) welcome_message: RefCell<Option<ClientWelcome>>,
+        pub(self) packet_rx: RefCell<Option<UnboundedReceiver<ClientMessage>>>,
+        pub(self) packet_tx: RefCell<Option<UnboundedSender<ServerMessage>>>,
+        pub(self) join_game_result: RefCell<Option<JoinGameResult>>,
         pub(self) action: JoinGameResultAction,
     }
 
+    unsafe impl Sync for MockGameState {}
+
     impl GameState for MockGameState {
         fn join_game(
-            &mut self,
+            &self,
             welcome_message: ClientWelcome,
             packet_rx: UnboundedReceiver<ClientMessage>,
             packet_tx: UnboundedSender<ServerMessage>,
         ) -> JoinGameResult {
-            self.welcome_message = Some(welcome_message);
+            self.welcome_message.replace(Some(welcome_message));
 
             match self.action {
                 JoinGameResultAction::DoOk => {
-                    self.packet_rx = Some(packet_rx);
-                    self.packet_tx = Some(packet_tx);
+                    self.packet_rx.replace(Some(packet_rx));
+                    self.packet_tx.replace(Some(packet_tx));
 
-                    self.join_game_result.take().unwrap_or_default()
+                    JoinGameResult::Ok
                 }
                 JoinGameResultAction::DoGameIsFull => {
                     JoinGameResult::GameIsFull(packet_rx, packet_tx)
@@ -319,8 +327,10 @@ mod tests {
         let (server_tx, mut server_rx) = unbounded_channel();
         let cancellation_token = CancellationToken::new();
 
-        let mut game_state = MockGameState::default();
-        game_state.join_game_result = Some(JoinGameResult::Ok);
+        let game_state = MockGameState::default();
+        game_state
+            .join_game_result
+            .replace(Some(JoinGameResult::Ok));
 
         let game_state = game_state.into();
 
@@ -360,7 +370,9 @@ mod tests {
         let cancellation_token = CancellationToken::new();
 
         let mut game_state = MockGameState::default();
-        game_state.join_game_result = Some(JoinGameResult::Ok);
+        game_state
+            .join_game_result
+            .replace(Some(JoinGameResult::Ok));
         game_state.action = JoinGameResultAction::DoGameIsFull;
 
         let game_state = game_state.into();
@@ -415,7 +427,9 @@ mod tests {
         let cancellation_token = CancellationToken::new();
 
         let mut game_state = MockGameState::default();
-        game_state.join_game_result = Some(JoinGameResult::Ok);
+        game_state
+            .join_game_result
+            .replace(Some(JoinGameResult::Ok));
         game_state.action = JoinGameResultAction::DoGameDoesNotExit;
 
         let game_state = game_state.into();
@@ -470,7 +484,9 @@ mod tests {
         let cancellation_token = CancellationToken::new();
 
         let mut game_state = MockGameState::default();
-        game_state.join_game_result = Some(JoinGameResult::Ok);
+        game_state
+            .join_game_result
+            .replace(Some(JoinGameResult::Ok));
         game_state.action = JoinGameResultAction::DoNickTaken;
 
         let game_state = game_state.into();

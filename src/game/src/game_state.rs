@@ -5,7 +5,7 @@ use crate::JoinGameResult;
 
 pub trait GameState: Send + Sync {
     fn join_game(
-        &mut self,
+        &self,
         welcome_message: ClientWelcome,
         packet_rx: UnboundedReceiver<ClientMessage>,
         packet_tx: UnboundedSender<ServerMessage>,

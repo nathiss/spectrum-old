@@ -16,6 +16,10 @@ pub enum JoinGameResult {
         UnboundedReceiver<ClientMessage>,
         UnboundedSender<ServerMessage>,
     ),
+    BadRequest(
+        UnboundedReceiver<ClientMessage>,
+        UnboundedSender<ServerMessage>,
+    ),
 }
 
 impl Default for JoinGameResult {
