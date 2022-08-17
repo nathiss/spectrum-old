@@ -12,6 +12,9 @@ use crate::{
     JoinGameResult,
 };
 
+/// This struct represents the game state.
+///
+/// It is responsible for managing players, game rooms and game's business logic.
 #[derive(Debug)]
 pub struct DefaultGameState {
     _config: GameStateConfig,
@@ -77,6 +80,13 @@ impl GameState for DefaultGameState {
 }
 
 impl DefaultGameState {
+    /// This method is used to construct an instance of Self.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - This is the configuration for the game state and all its internal components.
+    /// * `cancellation_token` - This token is not directly used by `DefaultGameState`, but rather it is passed to all
+    ///                          internal components which span new asynchronous tasks.
     pub fn new(config: GameStateConfig, cancellation_token: CancellationToken) -> Self {
         Self {
             _config: config,
