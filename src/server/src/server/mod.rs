@@ -19,6 +19,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{util::convert_to_future, Client, ServerConfig};
 
+/// This struct is the entrypoint to the entire application.
+///
+/// It is responsible for setting-up internal components of the server, managing incoming players' connections and for
+/// managing server resources such as the game state.
 pub struct Server {
     config: ServerConfig,
     cancellation_token: CancellationToken,
@@ -29,6 +33,15 @@ pub struct Server {
 }
 
 impl Server {
+    /// This method is used to construct the Server.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - A configuration for the server and all its internal components.
+    ///
+    /// # Returns
+    ///
+    /// An instance of this struct is being returned.
     pub fn new(config: ServerConfig) -> Self {
         let cancellation_token = CancellationToken::new();
 
@@ -48,8 +61,13 @@ impl Server {
         }
     }
 
+    /// This method is used to setup the internal components of the server.
     pub async fn init(&mut self) {}
 
+    /// This method sets-up the public endpoint for the clients to connect to.
+    ///
+    /// It constructs the [`Listener`] component and passes to it its configuration. Once the listener is ready to
+    /// accept connections, it spawns a new asynchronous task which accepts new WebSocket connections, until cancelled.
     pub async fn serve(&mut self) -> Result<(), anyhow::Error> {
         let mut listener = ListenerBuilder::default()
             .configure(self.config.public_endpoint.clone())
@@ -105,10 +123,20 @@ impl Server {
         Ok(())
     }
 
+    /// This method returns a copy of the cancellation token used to cancel all server's internal operations.
+    ///
+    /// # Returns
+    ///
+    /// A copy of server's cancellation token is returned.
     pub fn get_cancellation_token(&self) -> CancellationToken {
         self.cancellation_token.clone()
     }
 
+    /// This method consumes `self` and completes only when all internal components of the server have properly joined.
+    ///
+    /// *Note:* This method only await for server's internal components and since clients' connections are not one of
+    /// them, they are not awaited on. Their tasks are still properly cancelled, due to cancellation token being copied
+    /// and passed over, but for now there's no guarantee that all tasks have been cancelled before this method returns.
     pub async fn join(mut self) {
         drop(self.server_join_futures_tx);
 
