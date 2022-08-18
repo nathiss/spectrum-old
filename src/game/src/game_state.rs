@@ -1,10 +1,12 @@
+use async_trait::async_trait;
 use spectrum_packet::model::{ClientMessage, ClientWelcome, ServerMessage};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::JoinGameResult;
 
+#[async_trait]
 pub trait GameState: Send + Sync {
-    fn join_game(
+    async fn join_game(
         &self,
         welcome_message: ClientWelcome,
         packet_rx: UnboundedReceiver<ClientMessage>,

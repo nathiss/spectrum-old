@@ -8,7 +8,7 @@ pub(crate) struct Player {
 }
 
 impl Player {
-    pub fn _new(
+    pub fn new(
         _client_rx: UnboundedReceiver<ClientMessage>,
         _server_tx: UnboundedSender<ServerMessage>,
     ) -> Self {

@@ -61,7 +61,7 @@ fn spawn_receiving_task(
                                         break;
                                     }
 
-                                    match game_state.read().await.join_game(welcome_message, packet_rx, packet_tx) {
+                                    match game_state.read().await.join_game(welcome_message, packet_rx, packet_tx).await {
                                         spectrum_game::JoinGameResult::Ok => break,
                                         spectrum_game::JoinGameResult::GameIsFull(rx, tx) => {
                                             packet_rx = rx;
@@ -127,6 +127,7 @@ fn create_send_task(mut client: Client) -> UnboundedSender<ServerMessage> {
 mod tests {
     use std::{cell::RefCell, net::IpAddr, time::Duration};
 
+    use async_trait::async_trait;
     use spectrum_game::JoinGameResult;
     use spectrum_packet::model::{server_message::ServerMessageData, ClientLeave, ClientWelcome};
     use tokio::time::timeout;
@@ -158,8 +159,9 @@ mod tests {
 
     unsafe impl Sync for MockGameState {}
 
+    #[async_trait]
     impl GameState for MockGameState {
-        fn join_game(
+        async fn join_game(
             &self,
             welcome_message: ClientWelcome,
             packet_rx: UnboundedReceiver<ClientMessage>,

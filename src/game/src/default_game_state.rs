@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use async_trait::async_trait;
 use dashmap::DashMap;
 use log::error;
 use spectrum_packet::model::{ClientMessage, ClientWelcome, ServerMessage};
@@ -8,8 +9,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    game_room::GameRoom, game_room_status::GameRoomStatus, GameState, GameStateConfig,
-    JoinGameResult,
+    game_room::GameRoom, game_room_status::GameRoomStatus, player::Player, GameState,
+    GameStateConfig, JoinGameResult,
 };
 
 /// This struct represents the game state.
@@ -17,11 +18,12 @@ use crate::{
 /// It is responsible for managing players, game rooms and game's business logic.
 #[derive(Debug)]
 pub struct DefaultGameState {
-    _config: GameStateConfig,
-    _cancellation_token: CancellationToken,
+    config: GameStateConfig,
+    cancellation_token: CancellationToken,
     rooms: DashMap<Uuid, GameRoom>,
 }
 
+#[async_trait]
 impl GameState for DefaultGameState {
     /// This method *tries* to add a new player to a game room (either existing or a new one).
     ///
@@ -34,7 +36,7 @@ impl GameState for DefaultGameState {
     /// # Returns
     ///
     /// A result of this operation is returned. For more details see: [`JoinGameResult`].
-    fn join_game(
+    async fn join_game(
         &self,
         welcome_message: ClientWelcome,
         packet_rx: UnboundedReceiver<ClientMessage>,
@@ -56,17 +58,17 @@ impl GameState for DefaultGameState {
             let uuid = uuid.unwrap();
 
             match self.rooms.get_mut(&uuid) {
-                Some(game_room) => {
-                    match game_room.get_state() {
-                        GameRoomStatus::Waiting => {
-                            // TODO: add player to the room
-                            return JoinGameResult::Ok;
-                        }
-                        GameRoomStatus::Running => {
-                            return JoinGameResult::GameIsFull(packet_rx, packet_tx);
-                        }
+                Some(game_room) => match game_room.get_state().await {
+                    GameRoomStatus::Waiting => {
+                        let player = Player::new(packet_rx, packet_tx);
+                        game_room.add_player(welcome_message.nick, player).await;
+
+                        return JoinGameResult::Ok;
                     }
-                }
+                    GameRoomStatus::Running => {
+                        return JoinGameResult::GameIsFull(packet_rx, packet_tx);
+                    }
+                },
                 None => {
                     error!("Game with ID {} does not exist.", uuid);
                     return JoinGameResult::GameDoesNotExit(packet_rx, packet_tx);
@@ -74,8 +76,16 @@ impl GameState for DefaultGameState {
             }
         }
 
-        // This mean that the game needs to be created.
-        todo!()
+        // If game_id is empty then we need to create a new game room.
+        let game_room = GameRoom::new(self.config.clone(), self.cancellation_token.clone());
+
+        let player = Player::new(packet_rx, packet_tx);
+
+        game_room.add_player(welcome_message.nick, player).await;
+
+        self.rooms.insert(Uuid::new_v4(), game_room);
+
+        JoinGameResult::Ok
     }
 }
 
@@ -89,15 +99,15 @@ impl DefaultGameState {
     ///                          internal components which span new asynchronous tasks.
     pub fn new(config: GameStateConfig, cancellation_token: CancellationToken) -> Self {
         Self {
-            _config: config,
-            _cancellation_token: cancellation_token,
+            config,
+            cancellation_token,
             rooms: DashMap::new(),
         }
     }
 
     #[cfg(test)]
     pub(self) fn get_config(&self) -> &GameStateConfig {
-        &self._config
+        &self.config
     }
 }
 
