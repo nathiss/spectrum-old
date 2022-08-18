@@ -98,11 +98,23 @@ impl DefaultGameState {
     pub(self) fn get_config(&self) -> &GameStateConfig {
         &self.config
     }
+
+    #[cfg(test)]
+    pub(self) fn set_rooms(&mut self, rooms: DashMap<Uuid, GameRoom>) {
+        self.rooms = rooms;
+    }
+
+    #[cfg(test)]
+    pub(self) fn get_rooms(&self) -> &DashMap<Uuid, GameRoom> {
+        &self.rooms
+    }
 }
 
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
+    use tokio::sync::mpsc::unbounded_channel;
+
     use super::*;
 
     #[test]
@@ -115,5 +127,198 @@ mod tests {
 
         // Assert
         assert_eq!(&config, game_state.get_config());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_gameIdIsNotAValidId_returnsBadRequest() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_room: 0,
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let (_, client_rx) = unbounded_channel();
+        let (server_tx, _) = unbounded_channel();
+
+        let game_state = DefaultGameState::new(config, cancellation_token);
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: Some("not-a-real-uuid".to_owned()),
+        };
+
+        // Act
+        let result = game_state
+            .join_game(welcome_message, client_rx, server_tx)
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::BadRequest(_, _) => {}
+            result => assert!(false, "result is not a BadRequest. It's {:?}", result),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_gameIdDoesNotExist_returnsGameDoesNotExist() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_room: 0,
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let (_, client_rx) = unbounded_channel();
+        let (server_tx, _) = unbounded_channel();
+
+        let game_state = DefaultGameState::new(config, cancellation_token);
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: Some(Uuid::new_v4().to_string()),
+        };
+
+        // Act
+        let result = game_state
+            .join_game(welcome_message, client_rx, server_tx)
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::GameDoesNotExit(_, _) => {}
+            result => assert!(false, "result is not a GameDoesNotExit. It's {:?}", result),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_gameIdExists_addsPlayerToTheRoomAndReturnsOk() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_room: 5,
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let (_, client_rx) = unbounded_channel();
+        let (server_tx, _) = unbounded_channel();
+
+        let mut game_state = DefaultGameState::new(config.clone(), cancellation_token.clone());
+
+        let uuid = Uuid::new_v4();
+
+        let rooms = DashMap::with_capacity(1);
+        rooms.insert(uuid, GameRoom::new(config, cancellation_token));
+
+        game_state.set_rooms(rooms);
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: Some(uuid.to_string()),
+        };
+
+        // Act
+        let result = game_state
+            .join_game(welcome_message, client_rx, server_tx)
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::Ok => {}
+            result => assert!(false, "result is not an Ok. It's {:?}", result),
+        }
+
+        let number_of_players = game_state
+            .get_rooms()
+            .iter()
+            .next()
+            .unwrap()
+            .get_players()
+            .len();
+
+        assert_eq!(1, number_of_players);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_gameIsFull_doesNotAddThePlayerReturnsGameIsFull() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_room: 0,
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let (_, client_rx) = unbounded_channel();
+        let (server_tx, _) = unbounded_channel();
+
+        let mut game_state = DefaultGameState::new(config.clone(), cancellation_token.clone());
+
+        let uuid = Uuid::new_v4();
+
+        let mut room = GameRoom::new(config, cancellation_token);
+        room.set_game_room_state(GameRoomStatus::Running).await;
+
+        let rooms = DashMap::with_capacity(1);
+        rooms.insert(uuid, room);
+
+        game_state.set_rooms(rooms);
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: Some(uuid.to_string()),
+        };
+
+        // Act
+        let result = game_state
+            .join_game(welcome_message, client_rx, server_tx)
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::GameIsFull(_, _) => {}
+            result => assert!(false, "result is not an GameIsFull. It's {:?}", result),
+        }
+
+        let number_of_players = game_state
+            .get_rooms()
+            .iter()
+            .next()
+            .unwrap()
+            .get_players()
+            .len();
+
+        assert_eq!(0, number_of_players);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_gameIdIsNone_findANewGameForThePlayerAndReturnsOk() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_room: 2,
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let (_, client_rx) = unbounded_channel();
+        let (server_tx, _) = unbounded_channel();
+
+        let game_state = DefaultGameState::new(config.clone(), cancellation_token.clone());
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: None,
+        };
+
+        // Act
+        let result = game_state
+            .join_game(welcome_message, client_rx, server_tx)
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::Ok => {}
+            result => assert!(false, "result is not an Ok. It's {:?}", result),
+        }
+
+        let rooms = game_state.get_rooms();
+        assert_eq!(1, rooms.len());
+
+        let number_of_players = rooms.iter().next().unwrap().get_players().len();
+        assert_eq!(1, number_of_players);
     }
 }

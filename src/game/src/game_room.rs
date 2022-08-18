@@ -65,7 +65,7 @@ impl GameRoom {
         // This lock guard ensures that only one thread can access this method at any given moment.
         let mut game_status = self.game_room_status.write().await;
 
-        if *game_status != GameRoomStatus::Running {
+        if *game_status != GameRoomStatus::Waiting {
             warn!(
                 "Tried to add player {} to a game that's already started.",
                 nick
@@ -76,7 +76,7 @@ impl GameRoom {
 
         self.players.insert(nick, player);
 
-        if self.players.len() >= self.config.number_of_players_in_game_room {
+        if self.players.len() < self.config.number_of_players_in_game_room {
             HasGameRoomStarted(false)
         } else {
             *game_status = GameRoomStatus::Running;
@@ -131,5 +131,15 @@ impl GameRoom {
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         interval
+    }
+
+    #[cfg(test)]
+    pub(crate) fn get_players(&self) -> &DashMap<String, Player> {
+        &self.players
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn set_game_room_state(&mut self, state: GameRoomStatus) {
+        *self.game_room_status.write().await = state;
     }
 }
