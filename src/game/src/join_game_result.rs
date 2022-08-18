@@ -54,6 +54,6 @@ pub enum JoinGameResult {
 
 impl Default for JoinGameResult {
     fn default() -> Self {
-        JoinGameResult::Ok
+        Self::Ok
     }
 }
