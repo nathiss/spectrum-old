@@ -25,17 +25,6 @@ pub struct DefaultGameState {
 
 #[async_trait]
 impl GameState for DefaultGameState {
-    /// This method *tries* to add a new player to a game room (either existing or a new one).
-    ///
-    /// # Arguments
-    ///
-    /// * `welcome_message` - This message contains the unique identifier of the game and player's information.
-    /// * `packet_rx` - This stream is used to receive messages from the player.
-    /// * `packet_tx_ - This sink is used to send messages to the player.
-    ///
-    /// # Returns
-    ///
-    /// A result of this operation is returned. For more details see: [`JoinGameResult`].
     async fn join_game(
         &self,
         welcome_message: ClientWelcome,
