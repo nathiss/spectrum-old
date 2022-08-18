@@ -6,6 +6,7 @@
         "dashmap",
         "Hasher",
         "oneof",
+        "println",
         "prost",
         "proto",
         "protobuf",
@@ -16,6 +17,7 @@
         "SIGINT",
         "SIGQUIT",
         "SIGTERM",
+        "struct",
         "tungstenite"
     ],
     "cSpell.enableFiletypes": [
