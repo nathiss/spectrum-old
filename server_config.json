@@ -3,5 +3,7 @@
         "serve_interface": "127.0.0.1",
         "serve_port": 8080
     },
-    "game_state": {}
+    "game_state": {
+        "number_of_players_in_game_room": 10
+    }
 }
