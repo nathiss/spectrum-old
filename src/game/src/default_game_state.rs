@@ -9,18 +9,18 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    game_room::GameRoom, game_room_status::GameRoomStatus, player::Player, GameState,
+    game_lobby::GameLobby, game_lobby_status::GameLobbyStatus, player::Player, GameState,
     GameStateConfig, JoinGameResult,
 };
 
 /// This struct represents the game state.
 ///
-/// It is responsible for managing players, game rooms and game's business logic.
+/// It is responsible for managing players, game lobbies and game's business logic.
 #[derive(Debug)]
 pub struct DefaultGameState {
     config: GameStateConfig,
     cancellation_token: CancellationToken,
-    rooms: DashMap<Uuid, GameRoom>,
+    lobbies: DashMap<Uuid, GameLobby>,
 }
 
 #[async_trait]
@@ -46,15 +46,15 @@ impl GameState for DefaultGameState {
 
             let uuid = uuid.unwrap();
 
-            match self.rooms.get_mut(&uuid) {
-                Some(game_room) => match game_room.get_state().await {
-                    GameRoomStatus::Waiting => {
+            match self.lobbies.get_mut(&uuid) {
+                Some(mut game_lobby) => match game_lobby.get_state().await {
+                    GameLobbyStatus::Waiting => {
                         let player = Player::new(packet_rx, packet_tx);
-                        game_room.add_player(welcome_message.nick, player).await;
+                        game_lobby.add_player(welcome_message.nick, player).await;
 
                         return JoinGameResult::Ok;
                     }
-                    GameRoomStatus::Running => {
+                    GameLobbyStatus::Ready => {
                         return JoinGameResult::GameIsFull(packet_rx, packet_tx);
                     }
                 },
@@ -65,14 +65,15 @@ impl GameState for DefaultGameState {
             }
         }
 
-        // If game_id is empty then we need to create a new game room.
-        let game_room = GameRoom::new(self.config.clone(), self.cancellation_token.clone());
+        // If game_id is empty then we need to create a new game lobby or find a not started one.
+        // TODO: add game lobby lookup logic.
+        let mut game_lobby = GameLobby::new(self.config.clone(), self.cancellation_token.clone());
 
         let player = Player::new(packet_rx, packet_tx);
 
-        game_room.add_player(welcome_message.nick, player).await;
+        game_lobby.add_player(welcome_message.nick, player).await;
 
-        self.rooms.insert(Uuid::new_v4(), game_room);
+        self.lobbies.insert(Uuid::new_v4(), game_lobby);
 
         JoinGameResult::Ok
     }
@@ -90,7 +91,7 @@ impl DefaultGameState {
         Self {
             config,
             cancellation_token,
-            rooms: DashMap::new(),
+            lobbies: DashMap::new(),
         }
     }
 
@@ -100,13 +101,13 @@ impl DefaultGameState {
     }
 
     #[cfg(test)]
-    pub(self) fn set_rooms(&mut self, rooms: DashMap<Uuid, GameRoom>) {
-        self.rooms = rooms;
+    pub(self) fn set_lobbies(&mut self, lobbies: DashMap<Uuid, GameLobby>) {
+        self.lobbies = lobbies;
     }
 
     #[cfg(test)]
-    pub(self) fn get_rooms(&self) -> &DashMap<Uuid, GameRoom> {
-        &self.rooms
+    pub(self) fn get_lobbies(&self) -> &DashMap<Uuid, GameLobby> {
+        &self.lobbies
     }
 }
 
@@ -133,7 +134,7 @@ mod tests {
     async fn join_game_gameIdIsNotAValidId_returnsBadRequest() {
         // Arrange
         let config = GameStateConfig {
-            number_of_players_in_game_room: 0,
+            number_of_players_in_game_lobby: 0,
         };
         let cancellation_token = CancellationToken::new();
 
@@ -163,7 +164,7 @@ mod tests {
     async fn join_game_gameIdDoesNotExist_returnsGameDoesNotExist() {
         // Arrange
         let config = GameStateConfig {
-            number_of_players_in_game_room: 0,
+            number_of_players_in_game_lobby: 0,
         };
         let cancellation_token = CancellationToken::new();
 
@@ -190,10 +191,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn join_game_gameIdExists_addsPlayerToTheRoomAndReturnsOk() {
+    async fn join_game_gameIdExists_addsPlayerToThelobbyAndReturnsOk() {
         // Arrange
         let config = GameStateConfig {
-            number_of_players_in_game_room: 5,
+            number_of_players_in_game_lobby: 5,
         };
         let cancellation_token = CancellationToken::new();
 
@@ -204,10 +205,10 @@ mod tests {
 
         let uuid = Uuid::new_v4();
 
-        let rooms = DashMap::with_capacity(1);
-        rooms.insert(uuid, GameRoom::new(config, cancellation_token));
+        let lobbies = DashMap::with_capacity(1);
+        lobbies.insert(uuid, GameLobby::new(config, cancellation_token));
 
-        game_state.set_rooms(rooms);
+        game_state.set_lobbies(lobbies);
 
         let welcome_message = ClientWelcome {
             nick: "nick".to_owned(),
@@ -226,7 +227,7 @@ mod tests {
         }
 
         let number_of_players = game_state
-            .get_rooms()
+            .get_lobbies()
             .iter()
             .next()
             .unwrap()
@@ -240,7 +241,7 @@ mod tests {
     async fn join_game_gameIsFull_doesNotAddThePlayerReturnsGameIsFull() {
         // Arrange
         let config = GameStateConfig {
-            number_of_players_in_game_room: 0,
+            number_of_players_in_game_lobby: 0,
         };
         let cancellation_token = CancellationToken::new();
 
@@ -251,13 +252,13 @@ mod tests {
 
         let uuid = Uuid::new_v4();
 
-        let mut room = GameRoom::new(config, cancellation_token);
-        room.set_game_room_state(GameRoomStatus::Running).await;
+        let mut lobby = GameLobby::new(config, cancellation_token);
+        lobby.set_game_lobby_state(GameLobbyStatus::Ready).await;
 
-        let rooms = DashMap::with_capacity(1);
-        rooms.insert(uuid, room);
+        let lobbies = DashMap::with_capacity(1);
+        lobbies.insert(uuid, lobby);
 
-        game_state.set_rooms(rooms);
+        game_state.set_lobbies(lobbies);
 
         let welcome_message = ClientWelcome {
             nick: "nick".to_owned(),
@@ -276,7 +277,7 @@ mod tests {
         }
 
         let number_of_players = game_state
-            .get_rooms()
+            .get_lobbies()
             .iter()
             .next()
             .unwrap()
@@ -290,7 +291,7 @@ mod tests {
     async fn join_game_gameIdIsNone_findANewGameForThePlayerAndReturnsOk() {
         // Arrange
         let config = GameStateConfig {
-            number_of_players_in_game_room: 2,
+            number_of_players_in_game_lobby: 2,
         };
         let cancellation_token = CancellationToken::new();
 
@@ -315,10 +316,10 @@ mod tests {
             result => assert!(false, "result is not an Ok. It's {:?}", result),
         }
 
-        let rooms = game_state.get_rooms();
-        assert_eq!(1, rooms.len());
+        let lobbies = game_state.get_lobbies();
+        assert_eq!(1, lobbies.len());
 
-        let number_of_players = rooms.iter().next().unwrap().get_players().len();
+        let number_of_players = lobbies.iter().next().unwrap().get_players().len();
         assert_eq!(1, number_of_players);
     }
 }

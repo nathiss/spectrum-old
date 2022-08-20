@@ -1,6 +1,6 @@
 mod default_game_state;
-mod game_room;
-mod game_room_status;
+mod game_lobby;
+mod game_lobby_status;
 mod game_state;
 mod game_state_configuration;
 mod join_game_result;

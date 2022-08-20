@@ -7,14 +7,14 @@ use crate::JoinGameResult;
 /// This trait provides an interface through which its clients might interact with the global game state.
 #[async_trait]
 pub trait GameState: Send + Sync {
-    /// This method allows to add a new player into a game room.
+    /// This method allows to add a new player into a game lobby.
     ///
-    /// The game room is identified based on the information passed inside `welcome_message`.
+    /// The game lobby is identified based on the information passed inside `welcome_message`.
     ///
     /// # Arguments
     ///
-    /// * `welcome_message` - This message contains information with which its passible to uniquely identify a game room
-    ///                       and uniquely identify the new players inside the scope of the game room.
+    /// * `welcome_message` - This message contains information with which its passible to uniquely identify a game
+    ///                       lobby and uniquely identify the new players inside the scope of the game lobby.
     /// * `packet_rx` - This is a stream of player's incoming messages.
     /// * `packet_tx` - This is a sink of server outgoing messages.
     ///

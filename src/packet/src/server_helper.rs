@@ -8,3 +8,15 @@ pub fn make_server_welcome(status_code: server_welcome::StatusCode) -> ServerMes
         })),
     }
 }
+
+pub fn make_lobby_update(
+    status_code: lobby_update::StatusCode,
+    players: Vec<String>,
+) -> ServerMessage {
+    ServerMessage {
+        server_message_data: Some(ServerMessageData::LobbyUpdate(LobbyUpdate {
+            status_code: status_code.into(),
+            players,
+        })),
+    }
+}

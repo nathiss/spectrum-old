@@ -1,7 +1,7 @@
 use spectrum_packet::model::{ClientMessage, ServerMessage};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-/// This enum contains all possible outcomes of adding a plyer into a game room.
+/// This enum contains all possible outcomes of adding a plyer into a game lobby.
 #[derive(Debug)]
 pub enum JoinGameResult {
     /// This value indicates that the operation was successful.
