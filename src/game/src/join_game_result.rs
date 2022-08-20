@@ -2,12 +2,13 @@ use spectrum_packet::model::{ClientMessage, ServerMessage};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 /// This enum contains all possible outcomes of adding a plyer into a game lobby.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum JoinGameResult {
     /// This value indicates that the operation was successful.
     ///
     /// No data is returned, because the player's associated objects were moved into the other parts of the system and
     /// they are now responsible for managing player's connection.
+    #[default]
     Ok,
 
     /// This value indicates the the operation was unsuccessful due to the fact that the targeted game is full.
@@ -50,10 +51,4 @@ pub enum JoinGameResult {
         UnboundedReceiver<ClientMessage>,
         UnboundedSender<ServerMessage>,
     ),
-}
-
-impl Default for JoinGameResult {
-    fn default() -> Self {
-        Self::Ok
-    }
 }
