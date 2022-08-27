@@ -14,12 +14,12 @@ pub(crate) struct Player {
 
 impl Player {
     pub fn new(
-        client_rx: UnboundedReceiver<ClientMessage>,
-        server_tx: UnboundedSender<ServerMessage>,
+        client_rx: Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        server_tx: Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ) -> Self {
         Self {
-            client_rx: Arc::new(Mutex::new(client_rx)),
-            server_tx: Arc::new(Mutex::new(server_tx)),
+            client_rx,
+            server_tx,
         }
     }
 
@@ -29,5 +29,21 @@ impl Player {
 
     pub fn get_server_sink(&self) -> Arc<Mutex<UnboundedSender<ServerMessage>>> {
         self.server_tx.clone()
+    }
+}
+
+impl
+    Into<(
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
+    )> for Player
+{
+    fn into(
+        self,
+    ) -> (
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
+    ) {
+        (self.client_rx, self.server_tx)
     }
 }

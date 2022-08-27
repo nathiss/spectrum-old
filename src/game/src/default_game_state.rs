@@ -1,16 +1,21 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
 use log::error;
 use spectrum_packet::model::{ClientMessage, ClientWelcome, ServerMessage};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    game_lobby::GameLobby, game_lobby_status::GameLobbyStatus, player::Player, GameState,
-    GameStateConfig, JoinGameResult,
+    game_lobby::{AddPlayerResult, GameLobby},
+    game_lobby_status::GameLobbyStatus,
+    player::Player,
+    GameState, GameStateConfig, JoinGameResult,
 };
 
 /// This struct represents the game state.
@@ -28,8 +33,8 @@ impl GameState for DefaultGameState {
     async fn join_game(
         &self,
         welcome_message: ClientWelcome,
-        packet_rx: UnboundedReceiver<ClientMessage>,
-        packet_tx: UnboundedSender<ServerMessage>,
+        packet_rx: Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        packet_tx: Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ) -> JoinGameResult {
         if let Some(game_id) = welcome_message.game_id {
             let uuid = Uuid::from_str(&game_id);
@@ -50,9 +55,15 @@ impl GameState for DefaultGameState {
                 Some(mut game_lobby) => match game_lobby.get_state().await {
                     GameLobbyStatus::Waiting => {
                         let player = Player::new(packet_rx, packet_tx);
-                        game_lobby.add_player(welcome_message.nick, player).await;
-
-                        return JoinGameResult::Ok;
+                        match game_lobby.add_player(welcome_message.nick, player).await {
+                            AddPlayerResult::NickTaken(player) => {
+                                let (rx, tx) = player.into();
+                                return JoinGameResult::NickTaken(rx, tx);
+                            }
+                            AddPlayerResult::GameStarted | AddPlayerResult::Success => {
+                                return JoinGameResult::Ok
+                            }
+                        }
                     }
                     GameLobbyStatus::Ready => {
                         return JoinGameResult::GameIsFull(packet_rx, packet_tx);
@@ -150,7 +161,11 @@ mod tests {
 
         // Act
         let result = game_state
-            .join_game(welcome_message, client_rx, server_tx)
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
             .await;
 
         // Assert
@@ -180,7 +195,11 @@ mod tests {
 
         // Act
         let result = game_state
-            .join_game(welcome_message, client_rx, server_tx)
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
             .await;
 
         // Assert
@@ -217,7 +236,11 @@ mod tests {
 
         // Act
         let result = game_state
-            .join_game(welcome_message, client_rx, server_tx)
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
             .await;
 
         // Assert
@@ -267,7 +290,11 @@ mod tests {
 
         // Act
         let result = game_state
-            .join_game(welcome_message, client_rx, server_tx)
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
             .await;
 
         // Assert
@@ -307,7 +334,11 @@ mod tests {
 
         // Act
         let result = game_state
-            .join_game(welcome_message, client_rx, server_tx)
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
             .await;
 
         // Assert

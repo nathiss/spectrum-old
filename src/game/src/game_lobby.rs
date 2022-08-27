@@ -8,12 +8,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{game_lobby_status::GameLobbyStatus, player::Player, GameStateConfig};
 
-pub struct HasGameLobbyStarted(bool);
-
-impl Into<bool> for HasGameLobbyStarted {
-    fn into(self) -> bool {
-        self.0
-    }
+pub(crate) enum AddPlayerResult {
+    NickTaken(Player),
+    Success,
+    GameStarted,
 }
 
 /// This struct represents a single game lobby and all its associated content.
@@ -60,7 +58,7 @@ impl GameLobby {
     /// # Returns
     ///
     /// An indication of whether the operation caused the game to start is returned.
-    pub async fn add_player(&mut self, nick: String, player: Player) -> HasGameLobbyStarted {
+    pub async fn add_player(&mut self, nick: String, player: Player) -> AddPlayerResult {
         // This lock guard ensures that only one thread can access this method at any given moment.
         let mut game_status = self.game_lobby_status.write().await;
 
@@ -70,7 +68,12 @@ impl GameLobby {
                 nick
             );
 
-            return HasGameLobbyStarted(true);
+            return AddPlayerResult::GameStarted;
+        }
+
+        if self.players.contains_key(&nick) {
+            warn!("Player with nick {} already exists in the lobby.", nick);
+            return AddPlayerResult::NickTaken(player);
         }
 
         self.players.insert(nick, player);
@@ -78,7 +81,7 @@ impl GameLobby {
         if self.players.len() < self.config.number_of_players_in_game_lobby {
             self.broadcast_players(lobby_update::StatusCode::Waiting)
                 .await;
-            HasGameLobbyStarted(false)
+            AddPlayerResult::Success
         } else {
             *game_status = GameLobbyStatus::Ready;
 
@@ -88,7 +91,7 @@ impl GameLobby {
             self.broadcast_players(lobby_update::StatusCode::GameReady)
                 .await;
             self.start().await;
-            HasGameLobbyStarted(true)
+            AddPlayerResult::GameStarted
         }
     }
 

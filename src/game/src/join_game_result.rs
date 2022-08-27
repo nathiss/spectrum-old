@@ -1,5 +1,10 @@
+use std::sync::Arc;
+
 use spectrum_packet::model::{ClientMessage, ServerMessage};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 
 /// This enum contains all possible outcomes of adding a plyer into a game lobby.
 #[derive(Debug, Default)]
@@ -16,8 +21,8 @@ pub enum JoinGameResult {
     /// The associated data represents both sides of the player's connection. The owner of this value is now responsible
     /// for managing player's connection.
     GameIsFull(
-        UnboundedReceiver<ClientMessage>,
-        UnboundedSender<ServerMessage>,
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ),
 
     /// This value indicates the the operation was unsuccessful due to the fact that the targeted game does not exist
@@ -26,8 +31,8 @@ pub enum JoinGameResult {
     /// The associated data represents both sides of the player's connection. The owner of this value is now responsible
     /// for managing player's connection.
     GameDoesNotExit(
-        UnboundedReceiver<ClientMessage>,
-        UnboundedSender<ServerMessage>,
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ),
 
     /// This value indicates the the operation was unsuccessful due to the fact that the specified nick has already been
@@ -36,8 +41,8 @@ pub enum JoinGameResult {
     /// The associated data represents both sides of the player's connection. The owner of this value is now responsible
     /// for managing player's connection.
     NickTaken(
-        UnboundedReceiver<ClientMessage>,
-        UnboundedSender<ServerMessage>,
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ),
 
     /// This value indicates the the operation was unsuccessful due to the fact that the player's welcome message has
@@ -48,7 +53,7 @@ pub enum JoinGameResult {
     ///
     /// See: definition of Client's WelcomeMessage.
     BadRequest(
-        UnboundedReceiver<ClientMessage>,
-        UnboundedSender<ServerMessage>,
+        Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ),
 }

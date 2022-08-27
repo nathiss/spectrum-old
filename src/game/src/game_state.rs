@@ -1,6 +1,11 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use spectrum_packet::model::{ClientMessage, ClientWelcome, ServerMessage};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 
 use crate::JoinGameResult;
 
@@ -25,7 +30,7 @@ pub trait GameState: Send + Sync {
     async fn join_game(
         &self,
         welcome_message: ClientWelcome,
-        packet_rx: UnboundedReceiver<ClientMessage>,
-        packet_tx: UnboundedSender<ServerMessage>,
+        packet_rx: Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+        packet_tx: Arc<Mutex<UnboundedSender<ServerMessage>>>,
     ) -> JoinGameResult;
 }

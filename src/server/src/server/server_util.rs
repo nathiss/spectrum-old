@@ -10,7 +10,7 @@ use tokio::{
     select,
     sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        RwLock,
+        Mutex, RwLock,
     },
 };
 use tokio_util::sync::CancellationToken;
@@ -23,8 +23,8 @@ pub(super) async fn create_receive_task(
     cancellation_token: CancellationToken,
 ) {
     let addr = client.addr();
-    let packet_rx = client.get_packet_channel();
-    let packet_tx = create_send_task(client);
+    let packet_rx = Arc::new(Mutex::new(client.get_packet_channel()));
+    let packet_tx = Arc::new(Mutex::new(create_send_task(client)));
 
     spawn_receiving_task(addr, game_state, packet_rx, packet_tx, cancellation_token);
 }
@@ -32,12 +32,14 @@ pub(super) async fn create_receive_task(
 fn spawn_receiving_task(
     addr: SocketAddr,
     game_state: Arc<RwLock<Box<dyn GameState>>>,
-    mut packet_rx: UnboundedReceiver<ClientMessage>,
-    mut packet_tx: UnboundedSender<ServerMessage>,
+    mut packet_rx: Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+    mut packet_tx: Arc<Mutex<UnboundedSender<ServerMessage>>>,
     cancellation_token: CancellationToken,
 ) {
     tokio::spawn(async move {
         loop {
+            let mut packet_rx_locked = packet_rx.lock().await;
+
             select! {
                 biased;
 
@@ -47,7 +49,7 @@ fn spawn_receiving_task(
                     break;
                 }
 
-                message = packet_rx.recv() => {
+                message = packet_rx_locked.recv() => {
                     match message {
                         Some(message) => {
                             match message.client_message_data {
@@ -57,34 +59,35 @@ fn spawn_receiving_task(
                                     if nick_len == 0 || nick_len > 32 {
                                         error!("Nick from {} is not of reasonable length ({})", addr, nick_len);
 
-                                        let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::BadRequest));
+                                        let _ = packet_tx.lock().await.send(make_server_welcome(server_welcome::StatusCode::BadRequest));
                                         break;
                                     }
 
+                                    drop(packet_rx_locked);
                                     match game_state.read().await.join_game(welcome_message, packet_rx, packet_tx).await {
                                         spectrum_game::JoinGameResult::Ok => break,
                                         spectrum_game::JoinGameResult::GameIsFull(rx, tx) => {
                                             packet_rx = rx;
                                             packet_tx = tx;
 
-                                            let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::GameCouldNotBeFound));
+                                            let _ = packet_tx.lock().await.send(make_server_welcome(server_welcome::StatusCode::GameCouldNotBeFound));
                                         },
                                         spectrum_game::JoinGameResult::GameDoesNotExit(rx, tx) => {
                                             packet_rx = rx;
                                             packet_tx = tx;
 
-                                            let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::GameCouldNotBeFound));
+                                            let _ = packet_tx.lock().await.send(make_server_welcome(server_welcome::StatusCode::GameCouldNotBeFound));
                                         },
                                         spectrum_game::JoinGameResult::NickTaken(rx, tx) => {
                                             packet_rx = rx;
                                             packet_tx = tx;
 
-                                            let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::NickTaken));
+                                            let _ = packet_tx.lock().await.send(make_server_welcome(server_welcome::StatusCode::NickTaken));
                                         },
                                         spectrum_game::JoinGameResult::BadRequest(_rx, tx) => {
                                             packet_tx = tx;
 
-                                            let _ = packet_tx.send(make_server_welcome(server_welcome::StatusCode::BadRequest));
+                                            let _ = packet_tx.lock().await.send(make_server_welcome(server_welcome::StatusCode::BadRequest));
                                             break;
                                         }
                                     }
@@ -151,8 +154,8 @@ mod tests {
     #[derive(Debug, Default)]
     struct MockGameState {
         pub(self) welcome_message: RefCell<Option<ClientWelcome>>,
-        pub(self) packet_rx: RefCell<Option<UnboundedReceiver<ClientMessage>>>,
-        pub(self) packet_tx: RefCell<Option<UnboundedSender<ServerMessage>>>,
+        pub(self) packet_rx: RefCell<Option<Arc<Mutex<UnboundedReceiver<ClientMessage>>>>>,
+        pub(self) packet_tx: RefCell<Option<Arc<Mutex<UnboundedSender<ServerMessage>>>>>,
         pub(self) join_game_result: RefCell<Option<JoinGameResult>>,
         pub(self) action: JoinGameResultAction,
     }
@@ -164,8 +167,8 @@ mod tests {
         async fn join_game(
             &self,
             welcome_message: ClientWelcome,
-            packet_rx: UnboundedReceiver<ClientMessage>,
-            packet_tx: UnboundedSender<ServerMessage>,
+            packet_rx: Arc<Mutex<UnboundedReceiver<ClientMessage>>>,
+            packet_tx: Arc<Mutex<UnboundedSender<ServerMessage>>>,
         ) -> JoinGameResult {
             self.welcome_message.replace(Some(welcome_message));
 
@@ -209,6 +212,9 @@ mod tests {
         let game_state = MockGameState::new();
         let cancellation_token = CancellationToken::new();
 
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
+
         spawn_receiving_task(
             addr,
             game_state,
@@ -238,6 +244,9 @@ mod tests {
         let game_state = MockGameState::new();
         let cancellation_token = CancellationToken::new();
 
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
+
         spawn_receiving_task(addr, game_state, client_rx, server_tx, cancellation_token);
 
         let client_message = ClientMessage {
@@ -265,6 +274,9 @@ mod tests {
         let game_state = MockGameState::new();
         let cancellation_token = CancellationToken::new();
 
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
+
         spawn_receiving_task(addr, game_state, client_rx, server_tx, cancellation_token);
 
         // Act
@@ -286,6 +298,9 @@ mod tests {
         let (server_tx, mut server_rx) = unbounded_channel();
         let game_state = MockGameState::new();
         let cancellation_token = CancellationToken::new();
+
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
 
         spawn_receiving_task(addr, game_state, client_rx, server_tx, cancellation_token);
 
@@ -336,6 +351,9 @@ mod tests {
 
         let game_state = game_state.into();
 
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
+
         spawn_receiving_task(
             addr,
             game_state.clone(),
@@ -378,6 +396,9 @@ mod tests {
         game_state.action = JoinGameResultAction::DoGameIsFull;
 
         let game_state = game_state.into();
+
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
 
         spawn_receiving_task(
             addr,
@@ -436,6 +457,9 @@ mod tests {
 
         let game_state = game_state.into();
 
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
+
         spawn_receiving_task(
             addr,
             game_state.clone(),
@@ -492,6 +516,9 @@ mod tests {
         game_state.action = JoinGameResultAction::DoNickTaken;
 
         let game_state = game_state.into();
+
+        let client_rx = Arc::new(Mutex::new(client_rx));
+        let server_tx = Arc::new(Mutex::new(server_tx));
 
         spawn_receiving_task(
             addr,
