@@ -1,5 +1,6 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
+use dashmap::DashMap;
 use futures::{stream::FuturesUnordered, StreamExt};
 use log::{debug, error, warn};
 use spectrum_packet::{is_player_ready, make_lobby_update, model::lobby_update::StatusCode};
@@ -18,7 +19,7 @@ pub(crate) enum AddPlayerResult {
 #[derive(Debug)]
 pub(crate) struct GameLobby {
     config: GameStateConfig,
-    players: HashMap<String, Player>,
+    players: DashMap<String, Player>,
     game_lobby_status: RwLock<GameLobbyStatus>,
     cancellation_token: CancellationToken,
 }
@@ -36,7 +37,7 @@ impl GameLobby {
 
         Self {
             config,
-            players: HashMap::with_capacity(maximum_number_of_players),
+            players: DashMap::with_capacity(maximum_number_of_players),
             game_lobby_status: Default::default(),
             cancellation_token,
         }
@@ -58,7 +59,7 @@ impl GameLobby {
     /// # Returns
     ///
     /// An indication of whether the operation caused the game to start is returned.
-    pub async fn add_player(&mut self, nick: String, player: Player) -> AddPlayerResult {
+    pub async fn add_player(&self, nick: String, player: Player) -> AddPlayerResult {
         // This lock guard ensures that only one thread can access this method at any given moment.
         let mut game_status = self.game_lobby_status.write().await;
 
@@ -101,7 +102,7 @@ impl GameLobby {
     /// timeout window, then [`GameLobbyStatus`] is again switched to `Waiting` and the confirmation messages from other
     /// players are discarded. Unresponsive players are removed from the game lobby.
     /// If the procedure was successful, then the game starts.
-    pub async fn start(&mut self) {
+    pub async fn start(&self) {
         let mut game_lobby_state = self.game_lobby_status.write().await;
         if *game_lobby_state != GameLobbyStatus::Waiting {
             error!("GameLobby::start() has been called while the game is already running.");
@@ -146,11 +147,11 @@ impl GameLobby {
         let mut read_futures = FuturesUnordered::new();
         let player_readiness_timeout = self.config.player_readiness_timeout;
 
-        for (nick, player) in &self.players {
+        for player in &self.players {
             let cancellation_token = cancellation_token.clone();
             let client_rx = player.get_client_stream();
 
-            let nick = nick.clone();
+            let nick = player.key().clone();
 
             let read_or_timeout_future = async move {
                 select! {
@@ -220,24 +221,28 @@ impl GameLobby {
     }
 
     async fn broadcast_players(&self, status_code: StatusCode) {
-        let nicks: Vec<_> = self.players.keys().cloned().collect();
+        let mut nicks = Vec::with_capacity(self.players.len());
+        for player in &self.players {
+            nicks.push(player.key().clone());
+        }
 
         let lobby_update = make_lobby_update(status_code, nicks);
 
-        for (nick, player) in &self.players {
+        for player in &self.players {
             let player_sink = player.get_server_sink();
             let player_stream = player_sink.lock().await;
             if let Err(e) = player_stream.send(lobby_update.clone()) {
                 error!(
                     "Failed to send lobby update to player {}. Error: {}",
-                    nick, e
+                    player.key(),
+                    e
                 );
             }
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn get_players(&self) -> &HashMap<String, Player> {
+    pub(crate) fn get_players(&self) -> &DashMap<String, Player> {
         &self.players
     }
 

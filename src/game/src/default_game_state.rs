@@ -51,8 +51,8 @@ impl GameState for DefaultGameState {
 
             let uuid = uuid.unwrap();
 
-            match self.lobbies.get_mut(&uuid) {
-                Some(mut game_lobby) => match game_lobby.get_state().await {
+            match self.lobbies.get(&uuid) {
+                Some(game_lobby) => match game_lobby.get_state().await {
                     GameLobbyStatus::Waiting => {
                         let player = Player::new(packet_rx, packet_tx);
                         match game_lobby.add_player(welcome_message.nick, player).await {
@@ -78,7 +78,7 @@ impl GameState for DefaultGameState {
 
         // If game_id is empty then we need to create a new game lobby or find a not started one.
         // TODO: add game lobby lookup logic.
-        let mut game_lobby = GameLobby::new(self.config.clone(), self.cancellation_token.clone());
+        let game_lobby = GameLobby::new(self.config.clone(), self.cancellation_token.clone());
 
         let player = Player::new(packet_rx, packet_tx);
 
