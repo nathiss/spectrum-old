@@ -146,6 +146,7 @@ mod tests {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 0,
+            ..Default::default()
         };
         let cancellation_token = CancellationToken::new();
 
@@ -180,6 +181,7 @@ mod tests {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 0,
+            ..Default::default()
         };
         let cancellation_token = CancellationToken::new();
 
@@ -214,6 +216,7 @@ mod tests {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 5,
+            ..Default::default()
         };
         let cancellation_token = CancellationToken::new();
 
@@ -265,6 +268,7 @@ mod tests {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 0,
+            ..Default::default()
         };
         let cancellation_token = CancellationToken::new();
 
@@ -319,6 +323,7 @@ mod tests {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 2,
+            ..Default::default()
         };
         let cancellation_token = CancellationToken::new();
 

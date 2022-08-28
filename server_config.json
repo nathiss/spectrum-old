@@ -4,6 +4,7 @@
         "serve_port": 8080
     },
     "game_state": {
-        "number_of_players_in_game_lobby": 10
+        "number_of_players_in_game_lobby": 10,
+        "player_readiness_timeout": 30
     }
 }

@@ -144,6 +144,7 @@ impl GameLobby {
         let cancellation_token = self.cancellation_token.clone();
 
         let mut read_futures = FuturesUnordered::new();
+        let player_readiness_timeout = self.config.player_readiness_timeout;
 
         for (nick, player) in &self.players {
             let cancellation_token = cancellation_token.clone();
@@ -160,7 +161,7 @@ impl GameLobby {
                         (nick, None)
                     }
 
-                    result = timeout(Duration::from_secs(30), async move {
+                    result = timeout(Duration::from_secs(player_readiness_timeout), async move {
                         let mut client_stream = client_rx.lock().await;
                         client_stream.recv().await
                     }) => {
