@@ -39,7 +39,8 @@ message ServerWelcome {
          * There can be number of reasons:
          *     - message was too large,
          *     - player's nick was empty,
-         *     - the server refused to proces the message due to the lack of available resources or some internal error.
+         *     - the server refused to process the message due to the lack of available resources or some other internal
+                 error.
          * The server will terminate the connection with the player after this message is fully send.
          */
         BAD_REQUEST = 3;
