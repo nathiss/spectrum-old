@@ -2,8 +2,8 @@ use std::{collections::HashMap, time::Duration};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use log::{debug, error, warn};
-use spectrum_packet::{is_player_ready, make_lobby_update, model::lobby_update};
-use tokio::{select, sync::RwLock, time::timeout};
+use spectrum_packet::{is_player_ready, make_lobby_update, model::lobby_update::StatusCode};
+use tokio::{select, sync::RwLock, task::JoinError, time::timeout};
 use tokio_util::sync::CancellationToken;
 
 use crate::{game_lobby_status::GameLobbyStatus, player::Player, GameStateConfig};
@@ -79,8 +79,7 @@ impl GameLobby {
         self.players.insert(nick, player);
 
         if self.players.len() < self.config.number_of_players_in_game_lobby {
-            self.broadcast_players(lobby_update::StatusCode::Waiting)
-                .await;
+            self.broadcast_players(StatusCode::Waiting).await;
             AddPlayerResult::Success
         } else {
             *game_status = GameLobbyStatus::Ready;
@@ -88,8 +87,7 @@ impl GameLobby {
             // Mutable reference needs to be dropped to prevent dead-locking on `game_lobby_status`.
             drop(game_status);
 
-            self.broadcast_players(lobby_update::StatusCode::GameReady)
-                .await;
+            self.broadcast_players(StatusCode::GameReady).await;
             self.start().await;
             AddPlayerResult::GameStarted
         }
@@ -103,7 +101,7 @@ impl GameLobby {
     /// timeout window, then [`GameLobbyStatus`] is again switched to `Waiting` and the confirmation messages from other
     /// players are discarded. Unresponsive players are removed from the game lobby.
     /// If the procedure was successful, then the game starts.
-    pub async fn start(&self) {
+    pub async fn start(&mut self) {
         let mut game_lobby_state = self.game_lobby_status.write().await;
         if *game_lobby_state != GameLobbyStatus::Waiting {
             error!("GameLobby::start() has been called while the game is already running.");
@@ -113,6 +111,36 @@ impl GameLobby {
         *game_lobby_state = GameLobbyStatus::Ready;
         drop(game_lobby_state);
 
+        let players_to_remove = self.wait_for_readiness().await;
+
+        match players_to_remove {
+            Ok(nicks) if nicks.is_empty() => {
+                // This means that all players responded with 'Ready'. The game can now start.
+                self.broadcast_players(StatusCode::GameReady).await;
+                // TODO: start the game
+            }
+            Ok(nicks) => {
+                // At least one player failed to confirm readiness. The lobby needs to wait for more players.
+                for nick in &nicks {
+                    self.players.remove(nick);
+                }
+
+                let mut game_lobby_state = self.game_lobby_status.write().await;
+                *game_lobby_state = GameLobbyStatus::Waiting;
+                drop(game_lobby_state);
+            }
+            Err(e) => {
+                error!("Failed to join async task handle correctly. Error: {}", e);
+                return;
+            }
+        }
+    }
+
+    pub async fn get_state(&self) -> GameLobbyStatus {
+        self.game_lobby_status.read().await.clone()
+    }
+
+    async fn wait_for_readiness(&self) -> Result<Vec<String>, JoinError> {
         let cancellation_token = self.cancellation_token.clone();
 
         let mut read_futures = FuturesUnordered::new();
@@ -154,14 +182,17 @@ impl GameLobby {
             read_futures.push(read_or_timeout_future);
         }
 
-        tokio::spawn(async move {
+        let players_readiness_handle = tokio::spawn(async move {
+            let mut players_to_remove = Vec::new();
+
             while let Some((nick, message)) = read_futures.next().await {
                 if let None = message {
                     warn!(
                         "Player {} failed to confirm readiness within timeout window",
                         nick
                     );
-                    // TODO: remove player from the lobby
+
+                    players_to_remove.push(nick);
                     continue;
                 }
 
@@ -172,21 +203,22 @@ impl GameLobby {
                         "Player {} sent incorrect type of message. Got: {:?}",
                         nick, message
                     );
-                    // TODO: remove player from the lobby
+
+                    players_to_remove.push(nick);
                     continue;
                 }
 
                 // This means the player correctly sent us `PlayerReady` message. We can continue to process the rest of
                 // the players.
             }
+
+            players_to_remove
         });
+
+        players_readiness_handle.await
     }
 
-    pub async fn get_state(&self) -> GameLobbyStatus {
-        self.game_lobby_status.read().await.clone()
-    }
-
-    async fn broadcast_players(&self, status_code: lobby_update::StatusCode) {
+    async fn broadcast_players(&self, status_code: StatusCode) {
         let nicks: Vec<_> = self.players.keys().cloned().collect();
 
         let lobby_update = make_lobby_update(status_code, nicks);
