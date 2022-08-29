@@ -16,6 +16,10 @@ pub(crate) enum AddPlayerResult {
 }
 
 /// This struct represents a single game lobby and all its associated content.
+///
+/// NOTE: Once the player has been added into the lobby we do not check whether the peer has terminated the connection.
+/// This incident will be detected when we await for readiness signal from all players. We should probably find a better
+/// way to do this. Perhaps a periodic ping?
 #[derive(Debug)]
 pub(crate) struct GameLobby {
     config: GameStateConfig,
