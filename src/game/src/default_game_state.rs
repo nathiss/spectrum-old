@@ -289,6 +289,79 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn join_game_nickTaken_returnsNickTaken() {
+        // Arrange
+        let config = GameStateConfig {
+            number_of_players_in_game_lobby: 5,
+            ..Default::default()
+        };
+        let cancellation_token = CancellationToken::new();
+
+        let mut game_state = DefaultGameState::new(config.clone(), cancellation_token.clone());
+
+        let uuid = Uuid::new_v4();
+
+        let lobbies = DashMap::with_capacity(1);
+        lobbies.insert(uuid, GameLobby::new(config, cancellation_token));
+
+        game_state.set_lobbies(lobbies);
+
+        let welcome_message = ClientWelcome {
+            nick: "nick".to_owned(),
+            game_id: Some(uuid.to_string()),
+        };
+
+        game_state
+            .join_game(
+                welcome_message.clone(),
+                Arc::new(Mutex::new(unbounded_channel().1)),
+                Arc::new(Mutex::new(unbounded_channel().0)),
+            )
+            .await;
+
+        let (client_tx, client_rx) = unbounded_channel();
+        let (server_tx, mut server_rx) = unbounded_channel();
+
+        // Act
+        let result = game_state
+            .join_game(
+                welcome_message,
+                Arc::new(Mutex::new(client_rx)),
+                Arc::new(Mutex::new(server_tx)),
+            )
+            .await;
+
+        // Assert
+        match result {
+            JoinGameResult::NickTaken(rx, tx) => {
+                // Check whether the returns parts of the channel are correct.
+                let _ = client_tx.send(Default::default());
+                drop(client_tx);
+
+                assert!(rx.lock().await.recv().await.is_some());
+                assert!(rx.lock().await.recv().await.is_none());
+
+                let _ = tx.lock().await.send(Default::default());
+                drop(tx);
+
+                assert!(server_rx.recv().await.is_some());
+                assert!(server_rx.recv().await.is_none());
+            }
+            result => assert!(false, "result is not a NickTaken. It's {:?}", result),
+        }
+
+        let number_of_players = game_state
+            .get_lobbies()
+            .iter()
+            .next()
+            .unwrap()
+            .get_players()
+            .len();
+
+        assert_eq!(1, number_of_players);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn join_game_gameIsFull_doesNotAddThePlayerReturnsGameIsFull() {
         // Arrange
         let config = GameStateConfig {
