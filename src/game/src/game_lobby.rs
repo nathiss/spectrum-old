@@ -136,7 +136,10 @@ impl GameLobby {
                 drop(game_lobby_state);
             }
             Err(e) => {
-                error!("Failed to join async task handle correctly. Error: {}", e);
+                error!(
+                    "[GameLobby] Failed to join async task handle correctly. Error: {}",
+                    e
+                );
             }
         }
     }
