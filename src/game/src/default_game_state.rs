@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
+use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
 use log::error;
 use spectrum_packet::model::{ClientMessage, ClientWelcome, ServerMessage};
@@ -26,6 +27,7 @@ pub struct DefaultGameState {
     config: GameStateConfig,
     cancellation_token: CancellationToken,
     lobbies: DashMap<Uuid, GameLobby>,
+    not_yet_started_lobbies: SegQueue<Uuid>,
 }
 
 #[async_trait]
@@ -76,15 +78,37 @@ impl GameState for DefaultGameState {
             }
         }
 
-        // If game_id is empty then we need to create a new game lobby or find a not started one.
-        // TODO: add game lobby lookup logic.
-        let game_lobby = GameLobby::new(self.config.clone(), self.cancellation_token.clone());
-
+        // If the `game_id` is empty, then we search for an available lobby.
         let player = Player::new(packet_rx, packet_tx);
+
+        while let Some(id) = self.not_yet_started_lobbies.pop() {
+            match self.lobbies.get(&id) {
+                Some(lobby) => {
+                    if lobby.get_state().await == GameLobbyStatus::Started {
+                        continue;
+                    }
+
+                    lobby.add_player(welcome_message.nick, player).await;
+                    self.not_yet_started_lobbies.push(id);
+                    return JoinGameResult::Ok;
+                }
+                None => {
+                    // This should never happen. If the id does not exist, then we remove it from the queue and
+                    // continue to the next one.
+                    self.not_yet_started_lobbies.pop();
+                    continue;
+                }
+            }
+        }
+
+        // If game_id is empty then we need to create a new game lobby or find a not started one.
+        let game_lobby = GameLobby::new(self.config.clone(), self.cancellation_token.clone());
 
         game_lobby.add_player(welcome_message.nick, player).await;
 
-        self.lobbies.insert(Uuid::new_v4(), game_lobby);
+        let id = Uuid::new_v4();
+        self.lobbies.insert(id, game_lobby);
+        self.not_yet_started_lobbies.push(id);
 
         JoinGameResult::Ok
     }
@@ -103,6 +127,7 @@ impl DefaultGameState {
             config,
             cancellation_token,
             lobbies: DashMap::new(),
+            not_yet_started_lobbies: SegQueue::new(),
         }
     }
 
@@ -212,7 +237,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn join_game_gameIdExists_addsPlayerToThelobbyAndReturnsOk() {
+    async fn join_game_gameIdExists_addsPlayerToTheLobbyAndReturnsOk() {
         // Arrange
         let config = GameStateConfig {
             number_of_players_in_game_lobby: 5,
