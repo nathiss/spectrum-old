@@ -61,7 +61,7 @@ impl GameLobby {
     /// An indication of whether the operation caused the game to start is returned.
     pub async fn add_player(&self, nick: String, player: Player) -> AddPlayerResult {
         // This lock guard ensures that only one thread can access this method at any given moment.
-        let mut game_status = self.game_lobby_status.write().await;
+        let game_status = self.game_lobby_status.write().await;
 
         if *game_status != GameLobbyStatus::Waiting {
             warn!(
@@ -83,12 +83,9 @@ impl GameLobby {
             self.broadcast_players(StatusCode::Waiting).await;
             AddPlayerResult::Success
         } else {
-            *game_status = GameLobbyStatus::Ready;
-
             // Mutable reference needs to be dropped to prevent dead-locking on `game_lobby_status`.
             drop(game_status);
 
-            self.broadcast_players(StatusCode::GameReady).await;
             self.start().await;
             AddPlayerResult::GameStarted
         }
@@ -106,10 +103,9 @@ impl GameLobby {
         let mut game_lobby_state = self.game_lobby_status.write().await;
         if *game_lobby_state != GameLobbyStatus::Waiting {
             error!("GameLobby::start() has been called while the game is already running.");
-            panic!("GameLobby::start() can only be called once.");
         }
 
-        *game_lobby_state = GameLobbyStatus::Ready;
+        *game_lobby_state = GameLobbyStatus::Starting;
         drop(game_lobby_state);
 
         let players_to_remove = self.wait_for_readiness().await;
@@ -117,7 +113,12 @@ impl GameLobby {
         match players_to_remove {
             Ok(nicks) if nicks.is_empty() => {
                 // This means that all players responded with 'Ready'. The game can now start.
+                let mut game_lobby_state = self.game_lobby_status.write().await;
+                *game_lobby_state = GameLobbyStatus::Started;
+                drop(game_lobby_state);
+
                 self.broadcast_players(StatusCode::GameReady).await;
+
                 // TODO: start the game
             }
             Ok(nicks) => {

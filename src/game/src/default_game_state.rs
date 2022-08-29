@@ -65,7 +65,7 @@ impl GameState for DefaultGameState {
                             }
                         }
                     }
-                    GameLobbyStatus::Ready => {
+                    GameLobbyStatus::Starting | GameLobbyStatus::Started => {
                         return JoinGameResult::GameIsFull(packet_rx, packet_tx);
                     }
                 },
@@ -280,7 +280,7 @@ mod tests {
         let uuid = Uuid::new_v4();
 
         let mut lobby = GameLobby::new(config, cancellation_token);
-        lobby.set_game_lobby_state(GameLobbyStatus::Ready).await;
+        lobby.set_game_lobby_state(GameLobbyStatus::Started).await;
 
         let lobbies = DashMap::with_capacity(1);
         lobbies.insert(uuid, lobby);
