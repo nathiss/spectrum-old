@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 /// This struct holds the configuration for the public endpoint to which the clients will try to connect to.
-#[derive(Debug, PartialEq, Clone, Default, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Default, Deserialize)]
 pub struct PublicEndpointConfig {
     /// This field holds an interface to which the local listener will try to bind.
     ///

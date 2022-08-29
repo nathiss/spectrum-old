@@ -133,13 +133,12 @@ impl GameLobby {
             }
             Err(e) => {
                 error!("Failed to join async task handle correctly. Error: {}", e);
-                return;
             }
         }
     }
 
     pub async fn get_state(&self) -> GameLobbyStatus {
-        self.game_lobby_status.read().await.clone()
+        *self.game_lobby_status.read().await
     }
 
     async fn wait_for_readiness(&self) -> Result<Vec<String>, JoinError> {
@@ -189,7 +188,7 @@ impl GameLobby {
             let mut players_to_remove = Vec::new();
 
             while let Some((nick, message)) = read_futures.next().await {
-                if let None = message {
+                if message.is_none() {
                     warn!(
                         "Player {} failed to confirm readiness within timeout window",
                         nick

@@ -32,6 +32,7 @@ impl Player {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl
     Into<(
         Arc<Mutex<UnboundedReceiver<ClientMessage>>>,

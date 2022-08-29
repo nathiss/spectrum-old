@@ -17,6 +17,7 @@ use super::Connection;
 
 struct ShouldCloseReceiver(bool);
 
+#[allow(clippy::from_over_into)]
 impl Into<bool> for ShouldCloseReceiver {
     fn into(self) -> bool {
         self.0
