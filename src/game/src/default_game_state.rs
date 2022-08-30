@@ -64,7 +64,7 @@ impl GameState for DefaultGameState {
                             }
                             AddPlayerResult::GameRunning(player) => {
                                 let (rx, tx) = player.into();
-                                return JoinGameResult::GameDoesNotExit(rx, tx);
+                                return JoinGameResult::GameIsFull(rx, tx);
                             }
                             AddPlayerResult::GameStarted | AddPlayerResult::Success => {
                                 return JoinGameResult::Ok
