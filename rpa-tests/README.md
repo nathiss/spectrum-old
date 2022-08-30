@@ -8,5 +8,5 @@ This test suite uses [pyenv](https://github.com/pyenv/pyenv) and
 
 ## Resources
 
-* [Robot Framework User Guide (Version 5.0)](https://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html)
+* [Robot Framework User Guide](https://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html)
 * [Robot Framework Demo](https://github.com/robotframework/RobotDemo)
