@@ -5,6 +5,6 @@
     },
     "game_state": {
         "number_of_players_in_game_lobby": 10,
-        "player_readiness_timeout": 30
+        "player_readiness_timeout": 30000
     }
 }

@@ -62,6 +62,10 @@ impl GameState for DefaultGameState {
                                 let (rx, tx) = player.into();
                                 return JoinGameResult::NickTaken(rx, tx);
                             }
+                            AddPlayerResult::GameRunning(player) => {
+                                let (rx, tx) = player.into();
+                                return JoinGameResult::GameDoesNotExit(rx, tx);
+                            }
                             AddPlayerResult::GameStarted | AddPlayerResult::Success => {
                                 return JoinGameResult::Ok
                             }

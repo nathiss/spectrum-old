@@ -6,6 +6,6 @@ pub struct GameStateConfig {
     /// This field holds the maximum number of players with which the game lobby will start.
     pub number_of_players_in_game_lobby: usize,
 
-    /// This field holds the timeout value (in seconds) after which the player will be removed from the lobby.
+    /// This field holds the timeout value (in milliseconds) after which the player will be removed from the lobby.
     pub player_readiness_timeout: u64,
 }
