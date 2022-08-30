@@ -13,13 +13,15 @@
         "protobuf",
         "PROTOC",
         "protos",
+        "pyenv",
         "reqwest",
         "serde",
         "SIGINT",
         "SIGQUIT",
         "SIGTERM",
         "struct",
-        "tungstenite"
+        "tungstenite",
+        "virtualenv"
     ],
     "cSpell.enableFiletypes": [
         "proto3"
